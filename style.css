@@ -1034,6 +1034,10 @@ small {
   display: none !important;
 }
 
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
 .modal-header {
   padding: 0.9rem 1rem;
   background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
