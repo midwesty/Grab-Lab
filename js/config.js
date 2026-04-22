@@ -127,8 +127,8 @@ window.GrabLabConfig = (() => {
     starterBoatId: "mudskipper_01",
     starterStructures: [
       { structureId: "animal_pen_t1", quantity: 1 },
-      { structureId: "garden_plot_t1", quantity: 1 },
-      { structureId: "water_tank_t1", quantity: 1 },
+      { structureId: "storage_crate_t1", quantity: 1 },
+      { structureId: "aquarium_t1", quantity: 1 },
       { structureId: "workbench_t1", quantity: 1 },
       { structureId: "field_stove_t1", quantity: 1 },
       { structureId: "breeding_tank_t1", quantity: 1 }
@@ -266,7 +266,7 @@ window.GrabLabConfig = (() => {
     recipes: "data/recipes.json",
     structures: "data/structures.json",
     encounters: "data/encounters.json",
-    dialogue: "data/dialogue.json",
+    dialogue: "data/dialog.json",
     map: "data/map.json",
     lootTables: "data/lootTables.json",
     audio: "data/audio.json",
