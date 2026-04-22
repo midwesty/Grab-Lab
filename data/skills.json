@@ -1,0 +1,16 @@
+[
+  { "id": "fishing", "name": "Fishing", "description": "Catch rates, bait efficiency, and passive line success." },
+  { "id": "trapping", "name": "Trapping", "description": "Trap placement and capture quality." },
+  { "id": "harvesting", "name": "Harvesting", "description": "Gathering plants, fungus, and materials." },
+  { "id": "cooking", "name": "Cooking", "description": "Food quality and safer processing of catches." },
+  { "id": "crafting", "name": "Crafting", "description": "General item creation and queue efficiency." },
+  { "id": "carpentry", "name": "Carpentry", "description": "Building structures, repairing habitats, and improving stations." },
+  { "id": "boating", "name": "Boating", "description": "Travel efficiency, fuel use, and navigation." },
+  { "id": "medicine", "name": "Medicine", "description": "Healing, recovery, and infection treatment." },
+  { "id": "observation", "name": "Observation", "description": "Spotting resources, species, and environmental clues." },
+  { "id": "breeding", "name": "Breeding", "description": "Mutation control, offspring quality, and breeding efficiency." },
+  { "id": "combat_blunt", "name": "Blunt Combat", "description": "Improves melee attacks with blunt weapons." },
+  { "id": "combat_blade", "name": "Blade Combat", "description": "Improves cutting and piercing attacks." },
+  { "id": "combat_ranged", "name": "Ranged Combat", "description": "Improves thrown or projectile attacks." },
+  { "id": "foraging", "name": "Foraging", "description": "Finding edible or useful natural items." }
+]

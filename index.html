@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  />
+  <title>Grab Lab</title>
+  <meta
+    name="description"
+    content="Grab Lab - a cozy, creepy, data-driven survival, breeding, fishing, and conservation game."
+  />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Splash / Boot -->
+    <section id="bootScreen" class="screen-layer boot-screen active" aria-label="Boot Screen">
+      <div class="boot-card">
+        <div class="boot-logo-wrap">
+          <div class="boot-logo fungus-pulse"></div>
+          <h1 class="game-title">GRAB LAB</h1>
+          <p class="game-tagline">
+            Cozy conservation. Weird mutations. Boat life. Fungal apocalypse.
+          </p>
+        </div>
+
+        <div class="boot-actions">
+          <button id="btnContinue" class="primary-btn">Continue</button>
+          <button id="btnNewGame" class="secondary-btn">New Game</button>
+          <button id="btnLoadGame" class="secondary-btn">Load Save</button>
+          <button id="btnOpenSettings" class="ghost-btn">Settings</button>
+          <button id="btnOpenCredits" class="ghost-btn">Credits</button>
+        </div>
+
+        <div class="boot-footer">
+          <small>Local save files • Import / Export JSON • Touch + Mouse supported</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- Character Creator -->
+    <section id="characterCreatorScreen" class="screen-layer" aria-label="Character Creator">
+      <div class="creator-shell modal-style large">
+        <header class="creator-header">
+          <h2>Create Your Conservationist</h2>
+          <div class="creator-header-actions">
+            <button id="btnRandomizeCharacter" class="secondary-btn">Randomize</button>
+            <button id="btnBackToBootFromCreator" class="ghost-btn">Back</button>
+          </div>
+        </header>
+
+        <div class="creator-body">
+          <aside class="creator-preview-panel">
+            <div class="character-preview-card">
+              <div id="characterPreviewAvatar" class="avatar-preview">
+                <div class="avatar-layer avatar-base"></div>
+                <div class="avatar-layer avatar-hair"></div>
+                <div class="avatar-layer avatar-outfit"></div>
+                <div class="avatar-layer avatar-accessory"></div>
+              </div>
+              <div class="preview-meta">
+                <h3 id="previewName">New Ranger</h3>
+                <p id="previewOrigin">Remote Wetlands Field Station</p>
+                <p id="previewSummary">
+                  Tired, underpaid, wildly unprepared, and somehow humanity’s best shot.
+                </p>
+              </div>
+            </div>
+          </aside>
+
+          <main class="creator-form-panel">
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Name</span>
+                <input id="creatorName" type="text" maxlength="28" placeholder="Enter character name" />
+              </label>
+
+              <label class="form-field">
+                <span>Pronouns</span>
+                <select id="creatorPronouns">
+                  <option value="they">They / Them</option>
+                  <option value="she">She / Her</option>
+                  <option value="he">He / Him</option>
+                  <option value="custom">Custom Later</option>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Background</span>
+                <select id="creatorBackground"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Starting Specialty</span>
+                <select id="creatorSpecialty"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Skin Tone</span>
+                <input id="creatorSkinTone" type="range" min="1" max="8" value="3" />
+              </label>
+
+              <label class="form-field">
+                <span>Hair Style</span>
+                <select id="creatorHairStyle"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Hair Color</span>
+                <select id="creatorHairColor"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Outfit</span>
+                <select id="creatorOutfit"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Starting Trait</span>
+                <select id="creatorTraitA"></select>
+              </label>
+
+              <label class="form-field">
+                <span>Quirk</span>
+                <select id="creatorTraitB"></select>
+              </label>
+            </div>
+
+            <section class="creator-notes card">
+              <h3>Starting Perks</h3>
+              <ul id="creatorPerkList" class="plain-list"></ul>
+            </section>
+
+            <footer class="creator-footer">
+              <button id="btnStartGame" class="primary-btn">Begin Assignment</button>
+            </footer>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Game -->
+    <section id="gameScreen" class="screen-layer" aria-label="Game Screen">
+      <!-- Top HUD -->
+      <header id="topHud" class="top-hud">
+        <div class="hud-left">
+          <div class="hud-logo-mini">GL</div>
+          <div class="hud-day-block">
+            <div id="hudDay" class="hud-stat-main">Day 1</div>
+            <div id="hudTime" class="hud-stat-sub">06:00 AM</div>
+          </div>
+          <div class="hud-weather-block">
+            <div id="hudWeather" class="hud-stat-main">Clear</div>
+            <div id="hudBiome" class="hud-stat-sub">Field Station Island</div>
+          </div>
+        </div>
+
+        <div class="hud-center">
+          <div class="resource-pill">
+            <span>HP</span>
+            <div class="bar"><div id="barHealth" class="fill"></div></div>
+            <strong id="hudHealthText">100 / 100</strong>
+          </div>
+          <div class="resource-pill">
+            <span>Stamina</span>
+            <div class="bar"><div id="barStamina" class="fill"></div></div>
+            <strong id="hudStaminaText">100 / 100</strong>
+          </div>
+          <div class="resource-pill">
+            <span>Hunger</span>
+            <div class="bar"><div id="barHunger" class="fill"></div></div>
+            <strong id="hudHungerText">Fed</strong>
+          </div>
+          <div class="resource-pill">
+            <span>Thirst</span>
+            <div class="bar"><div id="barThirst" class="fill"></div></div>
+            <strong id="hudThirstText">Hydrated</strong>
+          </div>
+          <div class="resource-pill danger">
+            <span>Infection</span>
+            <div class="bar"><div id="barInfection" class="fill"></div></div>
+            <strong id="hudInfectionText">0%</strong>
+          </div>
+        </div>
+
+        <div class="hud-right">
+          <button id="btnPause" class="hud-btn">Pause</button>
+          <button id="btnTutorial" class="hud-btn">Tutorial</button>
+          <button id="btnAdmin" class="hud-btn admin">Admin</button>
+        </div>
+      </header>
+
+      <!-- Main Layout -->
+      <div class="game-layout">
+        <!-- Left Quick Panel -->
+        <aside id="leftSidebar" class="sidebar left-sidebar">
+          <div class="sidebar-section">
+            <h3>Quick Actions</h3>
+            <div class="quick-action-grid">
+              <button id="btnInventory" class="panel-btn">Inventory</button>
+              <button id="btnParty" class="panel-btn">Party</button>
+              <button id="btnMap" class="panel-btn">Map</button>
+              <button id="btnBoat" class="panel-btn">Boat</button>
+              <button id="btnBase" class="panel-btn">Base</button>
+              <button id="btnBuild" class="panel-btn">Build</button>
+              <button id="btnCraft" class="panel-btn">Craft</button>
+              <button id="btnJournal" class="panel-btn">Journal</button>
+              <button id="btnDNA" class="panel-btn">DNA Lab</button>
+              <button id="btnBreed" class="panel-btn">Breeding</button>
+              <button id="btnFish" class="panel-btn">Fishing</button>
+              <button id="btnTraps" class="panel-btn">Traps</button>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3>Tracked Tasks</h3>
+            <div id="trackedTaskList" class="stack-list"></div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3>Status Effects</h3>
+            <div id="statusEffectList" class="status-chip-wrap"></div>
+          </div>
+        </aside>
+
+        <!-- Play Area -->
+        <main id="playArea" class="play-area">
+          <div id="worldViewport" class="world-viewport">
+            <canvas id="worldCanvas" width="1600" height="900" aria-label="World"></canvas>
+            <canvas id="fxCanvas" width="1600" height="900" aria-label="Effects"></canvas>
+
+            <div id="interactionPrompt" class="interaction-prompt hidden">
+              <div class="prompt-title" id="interactionTitle">Point of Interest</div>
+              <div class="prompt-body" id="interactionBody">Tap to inspect.</div>
+            </div>
+
+            <div id="floatingDamageLayer" class="floating-layer" aria-hidden="true"></div>
+            <div id="toastLayer" class="toast-layer" aria-live="polite"></div>
+          </div>
+
+          <div id="bottomActionBar" class="bottom-action-bar">
+            <button id="btnInteract" class="action-btn primary">Interact</button>
+            <button id="btnHarvest" class="action-btn">Harvest</button>
+            <button id="btnCastLine" class="action-btn">Cast Line</button>
+            <button id="btnUseTool" class="action-btn">Use Tool</button>
+            <button id="btnAttack" class="action-btn">Attack</button>
+            <button id="btnSneak" class="action-btn">Sneak</button>
+            <button id="btnRest" class="action-btn">Rest</button>
+          </div>
+        </main>
+
+        <!-- Right Sidebar -->
+        <aside id="rightSidebar" class="sidebar right-sidebar">
+          <div class="sidebar-section">
+            <h3>Party</h3>
+            <div id="partyRosterMini" class="party-mini-list"></div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3>Nearby</h3>
+            <div id="nearbyList" class="stack-list"></div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3>Activity Log</h3>
+            <div id="activityLog" class="log-box"></div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Mini Map -->
+      <div id="miniMapShell" class="mini-map-shell">
+        <div class="mini-map-header">
+          <span>Mini Map</span>
+          <button id="btnExpandMiniMap" class="mini-btn">Expand</button>
+        </div>
+        <canvas id="miniMapCanvas" width="260" height="260" aria-label="Mini Map"></canvas>
+      </div>
+    </section>
+
+    <!-- Combat Screen -->
+    <section id="combatScreen" class="screen-layer combat-screen" aria-label="Combat Screen">
+      <div class="combat-backdrop">
+        <div class="combat-arena">
+          <header class="combat-header">
+            <div>
+              <h2 id="combatTitle">Fungal Encounter</h2>
+              <p id="combatSubtitle">The spores twitch in a deeply rude manner.</p>
+            </div>
+            <button id="btnFleeCombat" class="ghost-btn">Attempt Flee</button>
+          </header>
+
+          <div class="combat-body">
+            <div class="combat-enemy-side">
+              <div id="enemyBattlefield" class="battlefield-grid enemy-grid"></div>
+            </div>
+
+            <div class="combat-player-side">
+              <div id="allyBattlefield" class="battlefield-grid ally-grid"></div>
+            </div>
+          </div>
+
+          <footer class="combat-footer">
+            <div id="combatTurnOrder" class="turn-order-strip"></div>
+
+            <div class="combat-command-shell">
+              <div id="combatActorCard" class="combat-actor-card">
+                <h3 id="combatActorName">Ranger</h3>
+                <p id="combatActorStats">HP 100/100 • STA 80/100</p>
+              </div>
+
+              <div id="combatCommandPanel" class="combat-command-panel">
+                <button class="combat-btn" data-combat-action="attack">Attack</button>
+                <button class="combat-btn" data-combat-action="skill">Skill</button>
+                <button class="combat-btn" data-combat-action="item">Item</button>
+                <button class="combat-btn" data-combat-action="swap">Swap</button>
+                <button class="combat-btn" data-combat-action="defend">Defend</button>
+                <button class="combat-btn" data-combat-action="analyze">Analyze</button>
+              </div>
+
+              <div id="combatDetailPanel" class="combat-detail-panel">
+                <p>Select a command to continue.</p>
+              </div>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shared Modal Host -->
+    <div id="modalHost" class="modal-host" aria-live="polite"></div>
+
+    <!-- Inventory Modal -->
+    <section id="inventoryModal" class="modal-window hidden draggable" data-modal="inventory" aria-label="Inventory">
+      <header class="modal-header drag-handle">
+        <h2>Inventory</h2>
+        <div class="modal-header-actions">
+          <input id="inventorySearch" type="text" placeholder="Search inventory..." />
+          <button class="modal-close-btn" data-close-modal="inventoryModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="inventory-layout">
+          <div id="inventoryGrid" class="inventory-grid"></div>
+          <aside id="inventoryDetail" class="detail-panel">
+            <h3>Item Details</h3>
+            <div id="inventoryDetailContent">Select an item.</div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Party Modal -->
+    <section id="partyModal" class="modal-window hidden draggable" data-modal="party" aria-label="Party">
+      <header class="modal-header drag-handle">
+        <h2>Party & Companions</h2>
+        <div class="modal-header-actions">
+          <button class="modal-close-btn" data-close-modal="partyModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="partyMemberList" class="card-list"></div>
+          <div id="partyMemberDetail" class="detail-panel">Select a companion.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Map Modal -->
+    <section id="mapModal" class="modal-window hidden draggable large" data-modal="map" aria-label="Map">
+      <header class="modal-header drag-handle">
+        <h2>World Map</h2>
+        <div class="modal-header-actions">
+          <button id="btnFastTravelMode" class="secondary-btn">Fast Travel</button>
+          <button class="modal-close-btn" data-close-modal="mapModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="map-layout">
+          <canvas id="worldMapCanvas" width="1200" height="800"></canvas>
+          <aside class="detail-panel">
+            <h3>Location Info</h3>
+            <div id="mapLocationInfo">Select a tile.</div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Boat Modal -->
+    <section id="boatModal" class="modal-window hidden draggable" data-modal="boat" aria-label="Boat">
+      <header class="modal-header drag-handle">
+        <h2>River Boat</h2>
+        <div class="modal-header-actions">
+          <button class="modal-close-btn" data-close-modal="boatModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="boatPanel" class="detail-panel wide-panel">
+            <h3>Boat Overview</h3>
+            <div id="boatStats"></div>
+          </div>
+          <div id="boatUpgradePanel" class="detail-panel">
+            <h3>Upgrades</h3>
+            <div id="boatUpgradeList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Base Modal -->
+    <section id="baseModal" class="modal-window hidden draggable large" data-modal="base" aria-label="Base">
+      <header class="modal-header drag-handle">
+        <h2>Field Station Base</h2>
+        <div class="modal-header-actions">
+          <button id="btnBaseTabStructures" class="secondary-btn">Structures</button>
+          <button id="btnBaseTabCreatures" class="secondary-btn">Habitats</button>
+          <button id="btnBaseTabStorage" class="secondary-btn">Storage</button>
+          <button class="modal-close-btn" data-close-modal="baseModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div id="basePanelContent" class="detail-panel">Base systems loading...</div>
+      </div>
+    </section>
+
+    <!-- Crafting Modal -->
+    <section id="craftModal" class="modal-window hidden draggable" data-modal="craft" aria-label="Crafting">
+      <header class="modal-header drag-handle">
+        <h2>Crafting</h2>
+        <div class="modal-header-actions">
+          <input id="craftSearch" type="text" placeholder="Search recipes..." />
+          <button class="modal-close-btn" data-close-modal="craftModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="recipeList" class="card-list"></div>
+          <div id="recipeDetail" class="detail-panel">Select a recipe.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Breeding Modal -->
+    <section id="breedingModal" class="modal-window hidden draggable large" data-modal="breeding" aria-label="Breeding Lab">
+      <header class="modal-header drag-handle">
+        <h2>Breeding Lab</h2>
+        <div class="modal-header-actions">
+          <button id="btnOpenMutationGuide" class="secondary-btn">Mutation Guide</button>
+          <button class="modal-close-btn" data-close-modal="breedingModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="triple-layout">
+          <section class="detail-panel">
+            <h3>Parent A</h3>
+            <div id="breedingParentA"></div>
+          </section>
+          <section class="detail-panel">
+            <h3>Parent B</h3>
+            <div id="breedingParentB"></div>
+          </section>
+          <section class="detail-panel">
+            <h3>Additives & Outcome</h3>
+            <div id="breedingResultPanel"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- DNA Modal -->
+    <section id="dnaModal" class="modal-window hidden draggable" data-modal="dna" aria-label="DNA Database">
+      <header class="modal-header drag-handle">
+        <h2>DNA Database</h2>
+        <div class="modal-header-actions">
+          <input id="dnaSearch" type="text" placeholder="Search species or specimen..." />
+          <button class="modal-close-btn" data-close-modal="dnaModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="dnaList" class="card-list"></div>
+          <div id="dnaDetail" class="detail-panel">Select an entry.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fishing Modal -->
+    <section id="fishingModal" class="modal-window hidden draggable" data-modal="fishing" aria-label="Fishing">
+      <header class="modal-header drag-handle">
+        <h2>Fishing & Passive Lines</h2>
+        <div class="modal-header-actions">
+          <button class="modal-close-btn" data-close-modal="fishingModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="fishingPanel" class="detail-panel wide-panel"></div>
+          <div id="fishingCatchPanel" class="detail-panel"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Journal Modal -->
+    <section id="journalModal" class="modal-window hidden draggable" data-modal="journal" aria-label="Journal">
+      <header class="modal-header drag-handle">
+        <h2>Journal</h2>
+        <div class="modal-header-actions">
+          <button id="btnJournalTabQuests" class="secondary-btn">Quests</button>
+          <button id="btnJournalTabNotes" class="secondary-btn">Notes</button>
+          <button id="btnJournalTabCodex" class="secondary-btn">Codex</button>
+          <button class="modal-close-btn" data-close-modal="journalModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div id="journalContent" class="detail-panel">Journal loading...</div>
+      </div>
+    </section>
+
+    <!-- Tutorial Modal -->
+    <section id="tutorialModal" class="modal-window hidden draggable" data-modal="tutorial" aria-label="Tutorial">
+      <header class="modal-header drag-handle">
+        <h2>Tutorial</h2>
+        <div class="modal-header-actions">
+          <button id="btnTutorialPrev" class="secondary-btn">Prev</button>
+          <button id="btnTutorialNext" class="secondary-btn">Next</button>
+          <button class="modal-close-btn" data-close-modal="tutorialModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div id="tutorialContent" class="detail-panel">Welcome to Grab Lab.</div>
+      </div>
+    </section>
+
+    <!-- Settings Modal -->
+    <section id="settingsModal" class="modal-window hidden draggable" data-modal="settings" aria-label="Settings">
+      <header class="modal-header drag-handle">
+        <h2>Settings</h2>
+        <div class="modal-header-actions">
+          <button class="modal-close-btn" data-close-modal="settingsModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="settings-grid">
+          <label class="form-field">
+            <span>Music Volume</span>
+            <input id="settingMusicVolume" type="range" min="0" max="100" value="70" />
+          </label>
+          <label class="form-field">
+            <span>SFX Volume</span>
+            <input id="settingSfxVolume" type="range" min="0" max="100" value="80" />
+          </label>
+          <label class="form-field">
+            <span>Ambient Volume</span>
+            <input id="settingAmbientVolume" type="range" min="0" max="100" value="60" />
+          </label>
+          <label class="form-field">
+            <span>UI Scale</span>
+            <input id="settingUiScale" type="range" min="80" max="130" value="100" />
+          </label>
+          <label class="form-field checkbox-row">
+            <input id="settingReduceMotion" type="checkbox" />
+            <span>Reduce Motion</span>
+          </label>
+          <label class="form-field checkbox-row">
+            <input id="settingShowDamageNumbers" type="checkbox" checked />
+            <span>Show Damage Numbers</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Save / Load Modal -->
+    <section id="saveLoadModal" class="modal-window hidden draggable" data-modal="saveLoad" aria-label="Save and Load">
+      <header class="modal-header drag-handle">
+        <h2>Save / Load</h2>
+        <div class="modal-header-actions">
+          <button id="btnExportSave" class="secondary-btn">Export JSON</button>
+          <label class="secondary-btn file-label" for="importSaveInput">Import JSON</label>
+          <input id="importSaveInput" type="file" accept=".json" hidden />
+          <button class="modal-close-btn" data-close-modal="saveLoadModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="split-layout">
+          <div id="saveSlotList" class="card-list"></div>
+          <div id="saveSlotDetail" class="detail-panel">Select a save slot.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Modal -->
+    <section id="adminModal" class="modal-window hidden draggable large" data-modal="admin" aria-label="Admin Panel">
+      <header class="modal-header drag-handle admin-header">
+        <h2>Admin / Test Tools</h2>
+        <div class="modal-header-actions">
+          <button id="btnAdminTabCheats" class="secondary-btn">Cheats</button>
+          <button id="btnAdminTabDebug" class="secondary-btn">Debug</button>
+          <button id="btnAdminTabSpawn" class="secondary-btn">Spawn</button>
+          <button id="btnAdminTabWorld" class="secondary-btn">World</button>
+          <button class="modal-close-btn" data-close-modal="adminModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="admin-layout">
+          <aside class="detail-panel">
+            <h3>Quick Admin</h3>
+            <div class="quick-action-grid">
+              <button id="adminHeal" class="panel-btn">Full Heal</button>
+              <button id="adminFeed" class="panel-btn">Fill Hunger</button>
+              <button id="adminHydrate" class="panel-btn">Fill Thirst</button>
+              <button id="adminClearInfection" class="panel-btn">Clear Infection</button>
+              <button id="adminAddXP" class="panel-btn">Add XP</button>
+              <button id="adminAddMoney" class="panel-btn">Add Funds</button>
+              <button id="adminTimeMorning" class="panel-btn">Morning</button>
+              <button id="adminTimeNight" class="panel-btn">Night</button>
+              <button id="adminClearWeather" class="panel-btn">Clear Weather</button>
+              <button id="adminSpawnLoot" class="panel-btn">Spawn Loot</button>
+              <button id="adminUnlockMap" class="panel-btn">Reveal Map</button>
+              <button id="adminToggleGodMode" class="panel-btn">God Mode</button>
+            </div>
+          </aside>
+
+          <main class="detail-panel wide-panel">
+            <h3>Console</h3>
+            <textarea
+              id="adminConsoleInput"
+              rows="8"
+              placeholder="Type a cheat or debug command..."
+            ></textarea>
+            <div class="admin-console-actions">
+              <button id="btnRunAdminCommand" class="primary-btn">Run Command</button>
+              <button id="btnClearAdminLog" class="secondary-btn">Clear Log</button>
+            </div>
+            <div id="adminLog" class="log-box"></div>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <!-- Credits Modal -->
+    <section id="creditsModal" class="modal-window hidden draggable" data-modal="credits" aria-label="Credits">
+      <header class="modal-header drag-handle">
+        <h2>Credits</h2>
+        <div class="modal-header-actions">
+          <button class="modal-close-btn" data-close-modal="creditsModal">✕</button>
+        </div>
+      </header>
+      <div class="modal-body">
+        <div class="detail-panel">
+          <p><strong>Grab Lab</strong></p>
+          <p>Prototype scaffold build.</p>
+          <p>Design direction: cozy survival + conservation + breeding + mutation RPG.</p>
+          <p>Built for modular expansion with HTML, CSS, JS, and JSON.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Audio Hooks -->
+  <audio id="bgmMain" preload="none" loop></audio>
+  <audio id="ambientMain" preload="none" loop></audio>
+  <audio id="sfxMain" preload="none"></audio>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/saveLoad.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/animals.js"></script>
+  <script src="js/breeding.js"></script>
+  <script src="js/combat.js"></script>
+  <script src="js/crafting.js"></script>
+  <script src="js/build.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/fishing.js"></script>
+  <script src="js/tutorial.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

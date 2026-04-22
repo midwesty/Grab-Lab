@@ -1,0 +1,81 @@
+[
+  {
+    "id": "welcome",
+    "title": "Welcome to Grab Lab",
+    "body": "You are a conservationist stationed at the last relatively safe outpost in a fungal-ravaged wilderness. Your job is to survive, gather resources, breed helpful wildlife, and push the mold back one miserable patch at a time.",
+    "objectiveType": "view_only",
+    "hint": "Read through the tutorial and explore the field station."
+  },
+  {
+    "id": "move",
+    "title": "Move Around",
+    "body": "Tap or click the world to move to a nearby tile. On mobile, hold on the world for a right-click style context action.",
+    "objectiveType": "move_count",
+    "requiredCount": 1,
+    "hint": "Tap a nearby tile on the world or the minimap."
+  },
+  {
+    "id": "inventory",
+    "title": "Check Your Gear",
+    "body": "Open your inventory to inspect your starting supplies. You can use, equip, transfer, and sort items there.",
+    "objectiveType": "open_modal",
+    "targetModal": "inventoryModal",
+    "hint": "Open Inventory from the sidebar or press I."
+  },
+  {
+    "id": "fishing",
+    "title": "Try Fishing",
+    "body": "Fishing is one of your main survival tools. Cast a line, use bait when you have it, and check passive lines regularly.",
+    "objectiveType": "log_contains",
+    "logNeedle": "Cast line",
+    "hint": "Use the Cast Line button or open the Fishing panel."
+  },
+  {
+    "id": "crafting",
+    "title": "Craft Something",
+    "body": "Use your resources to craft field supplies, bait, additives, and survival tools.",
+    "objectiveType": "modal_and_action",
+    "targetModal": "craftModal",
+    "logNeedle": "Crafted",
+    "hint": "Open Crafting and craft one simple recipe."
+  },
+  {
+    "id": "companions",
+    "title": "Build Your Wildlife Team",
+    "body": "Captured animals can become companions, breeders, research subjects, or conservation release candidates.",
+    "objectiveType": "open_modal",
+    "targetModal": "partyModal",
+    "hint": "Open Party to inspect your roster."
+  },
+  {
+    "id": "breeding",
+    "title": "Breeding Lab",
+    "body": "Breeding combines traits, mutations, and additives to create useful offspring. Cross-species breeding comes later unless unlocked.",
+    "objectiveType": "open_modal",
+    "targetModal": "breedingModal",
+    "hint": "Open the Breeding Lab and inspect the parent selection panels."
+  },
+  {
+    "id": "map",
+    "title": "Map and Expansion",
+    "body": "Use the world map to inspect revealed areas, track cleared land, and unlock future fast travel nodes.",
+    "objectiveType": "open_modal",
+    "targetModal": "mapModal",
+    "hint": "Open the map and select a tile."
+  },
+  {
+    "id": "admin",
+    "title": "Admin Tools",
+    "body": "This prototype includes admin and cheat tools to help you test progression, combat, crafting, and world states quickly.",
+    "objectiveType": "open_modal",
+    "targetModal": "adminModal",
+    "hint": "Open the Admin panel and inspect the quick tools."
+  },
+  {
+    "id": "done",
+    "title": "You’re Ready",
+    "body": "That covers the basics. Explore, fish, build, breed strange wildlife, and start taking the world back from the fungus.",
+    "objectiveType": "view_only",
+    "hint": "You can reopen this tutorial anytime from the HUD."
+  }
+]

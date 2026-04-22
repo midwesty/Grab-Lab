@@ -1,0 +1,27 @@
+[
+  {
+    "id": "well_fed",
+    "name": "Well Fed",
+    "description": "Recent good nutrition improves morale."
+  },
+  {
+    "id": "hydrated",
+    "name": "Hydrated",
+    "description": "Recent clean water improves recovery."
+  },
+  {
+    "id": "infected",
+    "name": "Infected",
+    "description": "A dangerous fungal infection is taking hold."
+  },
+  {
+    "id": "focused",
+    "name": "Focused",
+    "description": "Mind sharp, hands steady."
+  },
+  {
+    "id": "exhausted",
+    "name": "Exhausted",
+    "description": "Stamina recovery and action performance are reduced."
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "fungal_blight",
+    "name": "Fungal Blight",
+    "type": "combat",
+    "biomes": ["field_station_island", "wetland", "reed_forest", "mudflats"],
+    "weight": 20,
+    "description": "A cluster of aggressive fungal life lashes out from the undergrowth."
+  },
+  {
+    "id": "fungal_boss",
+    "name": "Fungal Boss",
+    "type": "combat",
+    "biomes": ["fungal_grove"],
+    "weight": 6,
+    "description": "A swollen bloom-creature towers over the grove and commands lesser spores."
+  },
+  {
+    "id": "lost_cache",
+    "name": "Lost Cache",
+    "type": "loot",
+    "biomes": ["field_station_island", "wetland", "mudflats"],
+    "weight": 10,
+    "lootTableId": "starter_cache",
+    "description": "You discover an old field stash hidden beneath roots and tarp."
+  },
+  {
+    "id": "wildlife_tracks",
+    "name": "Wildlife Tracks",
+    "type": "discovery",
+    "biomes": ["wetland", "reed_forest", "mudflats"],
+    "weight": 12,
+    "description": "Fresh tracks reveal recent wildlife activity nearby."
+  },
+  {
+    "id": "spore_storm",
+    "name": "Spore Storm",
+    "type": "hazard",
+    "biomes": ["fungal_grove", "wetland"],
+    "weight": 8,
+    "description": "A drifting cloud of active spores sweeps across the area."
+  },
+  {
+    "id": "river_drifter",
+    "name": "River Drifter",
+    "type": "flavor",
+    "biomes": ["river_channel"],
+    "weight": 9,
+    "description": "A waterlogged crate, corpse, or mystery bundle drifts by."
+  }
+]

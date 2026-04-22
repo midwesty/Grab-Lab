@@ -1,0 +1,37 @@
+[
+  {
+    "id": "starter_cache",
+    "entries": [
+      { "itemId": "berries_wild", "weight": 20, "quantityMin": 1, "quantityMax": 4 },
+      { "itemId": "fresh_water", "weight": 20, "quantityMin": 1, "quantityMax": 3 },
+      { "itemId": "fiber_bundle", "weight": 18, "quantityMin": 2, "quantityMax": 5 },
+      { "itemId": "scrap_wood", "weight": 18, "quantityMin": 2, "quantityMax": 5 },
+      { "itemId": "bait_worm", "weight": 12, "quantityMin": 2, "quantityMax": 6 },
+      { "itemId": "bandage_basic", "weight": 8, "quantityMin": 1, "quantityMax": 2 },
+      { "itemId": "rope_bundle", "weight": 8, "quantityMin": 1, "quantityMax": 2 },
+      { "itemId": "mold_sample_jar", "weight": 4, "quantityMin": 1, "quantityMax": 1 }
+    ]
+  },
+  {
+    "id": "river_drift",
+    "entries": [
+      { "itemId": "old_boot", "weight": 24, "quantityMin": 1, "quantityMax": 1 },
+      { "itemId": "fresh_water", "weight": 20, "quantityMin": 1, "quantityMax": 2 },
+      { "itemId": "scrap_wood", "weight": 18, "quantityMin": 1, "quantityMax": 3 },
+      { "itemId": "fiber_bundle", "weight": 18, "quantityMin": 1, "quantityMax": 3 },
+      { "itemId": "bait_worm", "weight": 10, "quantityMin": 1, "quantityMax": 4 },
+      { "itemId": "broken_lure", "weight": 10, "quantityMin": 1, "quantityMax": 1 }
+    ]
+  },
+  {
+    "id": "fungal_grove_find",
+    "entries": [
+      { "itemId": "mold_sample_jar", "weight": 28, "quantityMin": 1, "quantityMax": 2 },
+      { "itemId": "luminous_spores", "weight": 18, "quantityMin": 1, "quantityMax": 1 },
+      { "itemId": "chameleon_skin", "weight": 10, "quantityMin": 1, "quantityMax": 2 },
+      { "itemId": "alcohol_basic", "weight": 8, "quantityMin": 1, "quantityMax": 1 },
+      { "itemId": "berries_wild", "weight": 14, "quantityMin": 1, "quantityMax": 3 },
+      { "itemId": "old_boot", "weight": 22, "quantityMin": 1, "quantityMax": 1 }
+    ]
+  }
+]

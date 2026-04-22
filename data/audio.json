@@ -1,0 +1,427 @@
+Below is a **copy/paste-ready dev log + handoff guide** that covers the project from early MVP through the current **Settlement system** integration, including the key “gotchas” we hit (CORS/file://, modal API mismatch, z-index layering, citizens/assignment storage, multi-inventory transfers).
+
+---
+
+# RV ROVER / SurviveAll — Dev Log & Handoff Guide (Launch → Settlement Update)
+
+## 0) What this project is
+
+**RV ROVER (SurviveAll)** is a vanilla browser survival/management sim. The player (“Rover”) travels tile-to-tile and manages:
+
+* **Crew** (Rover + recruited NPCs)
+* **Needs** (hunger/thirst/morale/health + conditions)
+* **Caravan systems** (RV storage, stations, crafting queues, actions/jobs)
+* **Settlement system** (new): build/manage local structures on any tile, assign NPC workers, manage local inventories, passive farm + water production.
+
+Hosted on **GitHub Pages** (or run locally via `python -m http.server`).
+
+---
+
+## 1) Project structure
+
+Typical layout:
+
+```
+/index.html
+/style.css
+/game.js
+/data/
+  config.json
+  biomes.json
+  items.json
+  recipes.json
+  stations.json
+  jobs.json
+  npcs.json
+  animals.json
+  portraits.json
+  structures.json        (new)
+images/
+  bg/
+  portraits/
+```
+
+**Important hosting rule:**
+The game relies on `fetch("data/*.json")`. This requires `http://` or `https://` (NOT `file://`).
+
+---
+
+## 2) How to run locally (critical)
+
+### ✅ Correct
+
+From the project folder:
+
+```bat
+cd /d "C:\Users\Station A\Desktop\SurviveAll\V0.4 Settlements"
+python -m http.server 8000
+```
+
+Open:
+
+* `http://127.0.0.1:8000/`
+
+### ❌ Wrong (breaks JSON loading)
+
+Opening `index.html` by double-clicking → `file:///...`
+
+This causes Chrome CORS errors like:
+
+* `origin 'null' blocked by CORS`
+* JSON fetch fails → engine falls back to “embedded defaults” → missing recipes/stations/structures.
+
+---
+
+## 3) Core architecture
+
+### 3.1 State + loadedData
+
+Two core objects drive the game:
+
+**`loadedData`**
+
+* `loadedData.data`: raw JSON blobs (items, stations, recipes, jobs, etc.)
+* `loadedData.idx`: indices/maps for fast lookup (e.g., itemsById)
+
+**`state`**
+The live game state (saved/loaded via localStorage). Major branches commonly include:
+
+* `state.crew.members`: Rover + NPCs
+* `state.rv.storage`: caravan inventory stacks/capacity
+* `state.queues`: crafting queues + job queues
+* `state.world`: tile discovery + tile states
+* `state.meta`: time/location/tutorial flags
+
+### 3.2 Save system
+
+Saves store the full `state` object into localStorage (plus metadata). Any feature placed in `state` is automatically persisted.
+
+---
+
+## 4) Base game systems (MVP)
+
+### 4.1 Tile / biome
+
+* The game always has a “current tile”
+* Tile changes happen primarily when **Check Location** is pressed
+* If user location not shared, the game still chooses a default tile
+
+### 4.2 Actions / Jobs
+
+Driven by `jobs.json`. Jobs yield items and outcomes; queues can exist per crew member.
+
+### 4.3 Stations + Crafting
+
+Driven by:
+
+* `stations.json` = upgrade tracks + station capability
+* `recipes.json` = crafting recipes attached to station IDs
+
+Crafting logic:
+
+* One queue per station
+* Station processes one craft at a time (queue can hold multiple)
+
+### 4.4 Inventory & transfers
+
+The base game transfer UX supports moving items between:
+
+* caravan storage
+* crew pockets/other inventories (depending on build)
+
+Important rule from MVP stability:
+
+* crafting/job completion must advance even if storage is full (avoid infinite loops/spam)
+
+### 4.5 Portrait strip (crew UI)
+
+* Crew portraits shown below windshield
+* Portrait paths persist on crew members in state (`member.portraitPath`)
+* Loaded from `data/portraits.json`
+
+---
+
+## 5) Settlement update — high-level design
+
+### 5.1 User-facing behavior
+
+* **Settlement button** exists on all tiles and always opens the Settlement modal.
+* Settlement is **per tile** (each tile has its own settlement state).
+* Settlement modal has tabs similar to main UI:
+
+  * **Structures**
+  * **Citizens**
+  * **Storage**
+  * **Stats**
+
+### 5.2 Citizens (assignment rules)
+
+* Rover **cannot** be assigned out of caravan.
+* Assigned NPCs:
+
+  * are removed from `state.crew.members`
+  * no longer appear in portrait strip
+  * no longer consume caravan supplies (future simulation planned)
+  * their carried items are returned to caravan storage (current rule)
+
+Citizens can later be:
+
+* reassigned to another structure
+* returned to caravan (if crew cap allows)
+* released from duty
+
+### 5.3 Structures (JSON-driven)
+
+Settlement structures are driven by:
+
+* `data/structures.json` (new)
+
+This is intentionally **separate from**:
+
+* caravan stations (`stations.json`)
+* crafting recipes (`recipes.json`)
+
+### 5.4 Multi-inventory requirement (new rule)
+
+Costs for building/upgrading must be payable from:
+
+* caravan inventory
+* ANY local structure storage on the same tile
+
+This forced a new “inventory aggregator” approach for:
+
+* building costs
+* crafting/build gating checks
+* transfer UI (choose which inventory you’re viewing/transferring to/from)
+
+---
+
+## 6) Structures implemented (current set)
+
+Initial set requested (expanded during design):
+
+1. **Permanent Storage**
+
+* Lvl 0 locked
+* Lvl 1: hole
+* Lvl 2: barn
+* Lvl 3: warehouse
+* **Does NOT require NPCs** (final rule)
+* Provides local tile storage accessible now + intended remote use later
+
+2. **Farm**
+
+* 3 levels (small/medium/large)
+* Requires **1 worker**
+* Player selects crop (one of existing crop item IDs)
+* Farm start cost (first time starting a crop):
+
+  * `10 dirt`, `10 seeds`, `50 clean water`
+* Operates like existing garden stations:
+
+  * has a timer
+  * auto-harvests
+  * re-queues itself to become passive
+
+3. **Stable**
+
+* Requires **1 worker**
+* Passive in current tile
+* Future: allows remote shipment when paired with Radio Tower
+
+4. **Water Reservoir**
+
+* Storage for **clean water only**
+* No workers
+
+5. **Water Pump**
+
+* Requires **1 worker**
+* Produces clean water “daily” (tick-based)
+* Outputs into Reservoir if built and has capacity
+
+6. **Radio Tower**
+
+* Future-only (communication & remote management)
+* Code prepared for later logic gating
+
+---
+
+## 7) Settlement state model (current)
+
+Per-tile settlement state typically includes:
+
+* `structures[structureId]`: built level, storage contents, workers assigned
+* `citizens[]`: list of assigned NPCs (templates pulled from crew members)
+* `settlementStats`: hunger/thirst/morale placeholders (future simulation hook)
+* production timers / last tick time for pump/farm loops
+
+**Key principle:** Keep this inside `state.world.tiles[tileId].settlement` (or equivalent) so it saves automatically.
+
+---
+
+## 8) Major integration issues encountered (and fixes)
+
+### 8.1 “Code showing inside modals” (the big one)
+
+**Symptom**
+
+* Quantity prompt shows `(val)=>{ ... }` inside the input area
+* Confirm prompt shows `(ok)=>{ ... }` in the body
+* Build/transfer fails or behaves oddly
+
+**Root cause**
+
+* Game’s modal helpers are Promise-based, but some call sites used an older callback signature:
+
+  * `inputModal(title, maxQty, (val)=>{...})`
+  * `confirmModal(text, (ok)=>{...})`
+
+When passed to a Promise-style modal, the callback gets treated as text and displayed.
+
+
+---
+
+### 8.2 Nested popups behind Settlement modal
+
+**Symptom**
+
+* Settlement modal looks perfect
+* But any confirm/input modal opened from inside settlement appears behind it
+
+**Cause**
+
+* Settlement overlay z-index > global modal overlay z-index
+
+
+### 8.5 Citizens “disappearing” THIS IS FIXED.
+
+**Symptom**
+
+* Assign NPC to structure
+* They vanish from crew (correct)
+* But Citizens tab appears empty (incorrect)
+
+**Cause (earlier build)**
+
+* UI created the citizens list but didn’t append it to DOM
+
+**Fix ed**
+
+* Properly render + append citizen list
+* Add “Assigned to: X” display lines
+
+---
+
+## 9) Current UX flows (what works now)
+
+### 9.1 Build/Upgrade structure
+
+* Structures tab shows each structure card:
+
+  * locked vs level
+  * worker requirement
+  * build/upgrade cost display
+  * Build/Upgrade button checks aggregated inventories
+
+### 9.2 Manage structure
+
+* “Manage” opens structure-specific controls:
+
+  * assign/remove workers
+  * farm crop selection + start/stop logic
+  * pump/reservoir status
+  * (future) radio/stable remote options
+
+### 9.3 Citizens tab
+
+* Shows all settlement citizens
+* Shows assignment at a glance
+* Allows:
+
+  * remove from duty
+  * return to caravan (crew cap permitting)
+  * release
+
+### 9.4 Settlement storage tab
+
+* Shows inventory dropdown
+
+  * caravan storage
+  * each built structure’s local storage
+* Allows transfer between any local inventories + caravan
+
+---
+
+## 10) Conventions for adding new settlement structures (future-proofing)
+
+To add a new structure:
+
+1. Add an entry to `data/structures.json`
+
+   * `id`, `name`, `desc`
+   * `workersRequired`
+   * `levels[]` with `cost[]` and optional `storageCap` / effects
+2. If it has special behavior (like pump/farm), add a structure “type” field and implement the tick handler:
+
+   * `type: "farm" | "pump" | "storage" | ...`
+3. Keep new behavior functions isolated:
+
+   * `settlementTick()`
+   * `runFarmCycle()`
+   * `runPumpCycle()`
+4. Use shared inventory helpers for cost checks/transfers.
+
+---
+
+## 11) Testing checklist (do not skip)
+
+When changing anything, always test:
+
+### Base MVP regression
+
+* Actions/jobs still work and award loot
+* Crafting queue completes and advances even when storage is full
+* Stations upgrade still works
+* Save/load integrity
+* Admin tools still open and function
+
+### Settlement-specific
+
+* Open/close settlement modal repeatedly (no UI duplication)
+* Build a structure with cost paid from:
+
+  * caravan only
+  * local storage only
+  * mixed (caravan + local)
+* Assign citizen to structure (citizen disappears from crew strip)
+* Citizens tab shows correct assignments
+* Transfer item:
+
+  * qty=1
+  * qty>1 (quantity prompt must not show code)
+* Nested confirm/input modals appear over settlement (z-index)
+* Tile switch (Check Location):
+
+  * settlement is tile-specific
+
+---
+
+## 12) Known “next steps” roadmap hooks
+
+* Remote logistics:
+
+  * Stable + Radio Tower enable transfer from other tiles
+* Settlement needs simulation:
+
+  * settlement hunger/thirst/morale
+  * simple consumption model
+* UI polish:
+
+  * structure list filtering
+  * citizen assignment drag/drop
+* Expand structure library via structures.json
+
+---
+
+If you want, I can also generate a **“Dev Quick Start”** one-pager that’s shorter (commands + file map + “where to add stuff” + test checklist) for a new GPT/dev to read in 2 minutes.

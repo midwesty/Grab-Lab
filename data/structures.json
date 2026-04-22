@@ -1,0 +1,132 @@
+[
+  {
+    "id": "animal_pen_t1",
+    "name": "Animal Pen",
+    "description": "Basic pen for medium land creatures.",
+    "category": "habitat",
+    "tags": ["habitat"],
+    "habitatType": "general",
+    "sizeLimit": "medium",
+    "capacity": 2,
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 8 },
+      { "itemId": "fiber_bundle", "quantity": 4 }
+    ]
+  },
+  {
+    "id": "aquarium_t1",
+    "name": "Aquarium",
+    "description": "A water habitat for fish and amphibious specimens.",
+    "category": "habitat",
+    "tags": ["habitat"],
+    "habitatType": "aquarium",
+    "sizeLimit": "medium",
+    "capacity": 2,
+    "water": true,
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 6 },
+      { "itemId": "fresh_water", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "aviary_t1",
+    "name": "Aviary",
+    "description": "A contained high-net habitat for flying creatures.",
+    "category": "habitat",
+    "tags": ["habitat"],
+    "habitatType": "aviary",
+    "sizeLimit": "medium",
+    "capacity": 2,
+    "flying": true,
+    "requiredLevel": 2,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 10 },
+      { "itemId": "fiber_bundle", "quantity": 6 },
+      { "itemId": "rope_bundle", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "workbench_t1",
+    "name": "Workbench",
+    "description": "Enables basic crafting.",
+    "category": "crafting",
+    "tags": ["crafting", "utility"],
+    "stationId": "workbench",
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 6 },
+      { "itemId": "fiber_bundle", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "field_stove_t1",
+    "name": "Field Stove",
+    "description": "Allows boiling and cooking recipes.",
+    "category": "crafting",
+    "tags": ["crafting", "utility"],
+    "stationId": "stove",
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 4 },
+      { "itemId": "rope_bundle", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "storage_crate_t1",
+    "name": "Storage Crate",
+    "description": "Adds extra base storage.",
+    "category": "storage",
+    "tags": ["storage"],
+    "storageBonus": 12,
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 5 },
+      { "itemId": "fiber_bundle", "quantity": 3 }
+    ]
+  },
+  {
+    "id": "breeding_tank_t1",
+    "name": "Breeding Tank",
+    "description": "Supports controlled breeding projects.",
+    "category": "utility",
+    "tags": ["utility", "crafting"],
+    "stationId": "breeding_tank",
+    "requiredLevel": 2,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 8 },
+      { "itemId": "fresh_water", "quantity": 2 },
+      { "itemId": "rope_bundle", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "boat_storage_rack_t1",
+    "name": "Boat Storage Rack",
+    "description": "Adds storage and organization to the river boat.",
+    "category": "boat_upgrade",
+    "tags": ["boat_upgrade", "storage"],
+    "buildTarget": "boat",
+    "boatFuelBonus": 0,
+    "boatHpBonus": 4,
+    "requiredLevel": 1,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 6 },
+      { "itemId": "rope_bundle", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "boat_hull_patch_t1",
+    "name": "Hull Patch Kit",
+    "description": "Improves boat hull integrity.",
+    "category": "boat_upgrade",
+    "tags": ["boat_upgrade", "defense"],
+    "buildTarget": "boat",
+    "boatHpBonus": 12,
+    "requiredLevel": 2,
+    "cost": [
+      { "itemId": "scrap_wood", "quantity": 8 },
+      { "itemId": "fiber_bundle", "quantity": 4 }
+    ]
+  }
+]

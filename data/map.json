@@ -1,0 +1,171 @@
+{
+  "nodes": [
+    {
+      "id": "field_station_dock",
+      "name": "Field Station Dock",
+      "shortName": "Dock",
+      "x": 12,
+      "y": 14
+    },
+    {
+      "id": "reed_bank",
+      "name": "Reed Bank",
+      "shortName": "Reeds",
+      "x": 16,
+      "y": 16
+    },
+    {
+      "id": "mud_spit",
+      "name": "Mud Spit",
+      "shortName": "Mud",
+      "x": 9,
+      "y": 19
+    },
+    {
+      "id": "fungal_glow",
+      "name": "Fungal Glow Grove",
+      "shortName": "Glow",
+      "x": 21,
+      "y": 18
+    }
+  ],
+  "tiles": [
+    {
+      "id": "tile_12_14",
+      "x": 12,
+      "y": 14,
+      "biomeId": "field_station_island",
+      "type": "land",
+      "name": "Field Station Alpha",
+      "pointsOfInterest": [
+        {
+          "id": "dock_marker",
+          "name": "Dock",
+          "shortName": "Dock",
+          "description": "Your river boat is tied up here, somehow still floating.",
+          "type": "dock",
+          "tileX": 12,
+          "tileY": 14,
+          "localX": 33,
+          "localY": 45
+        },
+        {
+          "id": "fish_spot_1",
+          "name": "Fishing Spot",
+          "shortName": "Fish",
+          "description": "The water looks lively, or judgmental. Hard to tell.",
+          "type": "fish_spot",
+          "tileX": 12,
+          "tileY": 14,
+          "localX": 49,
+          "localY": 24
+        }
+      ]
+    },
+    {
+      "id": "tile_13_14",
+      "x": 13,
+      "y": 14,
+      "biomeId": "river_channel",
+      "type": "water",
+      "name": "Channel Edge",
+      "pointsOfInterest": [
+        {
+          "id": "fish_spot_2",
+          "name": "Deep Water Pocket",
+          "shortName": "Deep",
+          "description": "A darker patch of river that suggests larger fish.",
+          "type": "fish_spot",
+          "tileX": 13,
+          "tileY": 14,
+          "localX": 36,
+          "localY": 29
+        }
+      ]
+    },
+    {
+      "id": "tile_12_15",
+      "x": 12,
+      "y": 15,
+      "biomeId": "wetland",
+      "type": "land",
+      "name": "Reed Fringe",
+      "pointsOfInterest": [
+        {
+          "id": "reed_patch_1",
+          "name": "Reed Patch",
+          "shortName": "Reeds",
+          "description": "Dense reeds useful for fibers and sheltering small wildlife.",
+          "type": "resource",
+          "tileX": 12,
+          "tileY": 15,
+          "localX": 25,
+          "localY": 22
+        }
+      ]
+    },
+    {
+      "id": "tile_16_16",
+      "x": 16,
+      "y": 16,
+      "biomeId": "reed_forest",
+      "type": "land",
+      "name": "Reed Bank",
+      "pointsOfInterest": [
+        {
+          "id": "scout_marker_1",
+          "name": "Animal Tracks",
+          "shortName": "Tracks",
+          "description": "Fresh signs of marsh predators moving through the reeds.",
+          "type": "tracks",
+          "tileX": 16,
+          "tileY": 16,
+          "localX": 20,
+          "localY": 36
+        }
+      ]
+    },
+    {
+      "id": "tile_9_19",
+      "x": 9,
+      "y": 19,
+      "biomeId": "mudflats",
+      "type": "land",
+      "name": "Mud Spit",
+      "pointsOfInterest": [
+        {
+          "id": "crab_bed_1",
+          "name": "Crab Bed",
+          "shortName": "Crabs",
+          "description": "Shallow muddy burrows full of crustacean activity.",
+          "type": "resource",
+          "tileX": 9,
+          "tileY": 19,
+          "localX": 40,
+          "localY": 40
+        }
+      ]
+    },
+    {
+      "id": "tile_21_18",
+      "x": 21,
+      "y": 18,
+      "biomeId": "fungal_grove",
+      "type": "land",
+      "name": "Fungal Glow Grove",
+      "pointsOfInterest": [
+        {
+          "id": "spore_bloom_1",
+          "name": "Spore Bloom",
+          "shortName": "Bloom",
+          "description": "A glowing fungal cluster that looks equal parts valuable and dangerous.",
+          "type": "fungal_patch",
+          "tileX": 21,
+          "tileY": 18,
+          "localX": 32,
+          "localY": 28
+        }
+      ]
+    }
+  ]
+}

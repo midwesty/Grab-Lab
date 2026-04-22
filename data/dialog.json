@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tutorial_arrival",
+    "title": "Arrival at Field Station Alpha",
+    "summary": "Get your bearings, inspect the dock, and learn the basics of survival.",
+    "lines": [
+      {
+        "speaker": "Dispatcher",
+        "text": "Field Station Alpha is yours now. Try not to let the fungus win."
+      },
+      {
+        "speaker": "Ranger",
+        "text": "That feels like a low bar and a deeply unfair amount of responsibility."
+      }
+    ]
+  },
+  {
+    "id": "dock_intro",
+    "title": "At the Dock",
+    "summary": "The station boat is still functional, which already counts as a miracle.",
+    "lines": [
+      {
+        "speaker": "Ranger",
+        "text": "Still floating. Great. Let's never ask why."
+      }
+    ]
+  },
+  {
+    "id": "breeding_lab_intro",
+    "title": "Breeding Lab Notes",
+    "summary": "Controlled wildlife breeding is risky, useful, and morally murky.",
+    "lines": [
+      {
+        "speaker": "Old Notes",
+        "text": "Trait inheritance remains inconsistent. Additives help. Sometimes too much."
+      }
+    ]
+  },
+  {
+    "id": "fungal_warning",
+    "title": "Fungal Threat",
+    "summary": "The glow in the grove is beautiful right up until it starts moving.",
+    "lines": [
+      {
+        "speaker": "Ranger",
+        "text": "That is either scenic or medically catastrophic."
+      }
+    ]
+  }
+]
