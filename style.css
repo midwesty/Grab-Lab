@@ -700,11 +700,24 @@ small {
   overflow: hidden;
 }
 
-.sidebar {
+ .sidebar {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+}
+
+.right-sidebar {
+  min-height: 0;
+}
+
+.right-sidebar .sidebar-section {
+  flex: 0 0 auto;
+}
+
+.right-sidebar .sidebar-section:last-child {
+  flex: 1 1 240px;
+  min-height: 220px;
 }
 
 .sidebar-section {
@@ -728,8 +741,9 @@ small {
   gap: 0.55rem;
 }
 
-.log-box {
+ .log-box {
   min-height: 120px;
+  height: 100%;
   overflow: auto;
   border-radius: 14px;
   border: 1px solid var(--outline);
@@ -843,10 +857,12 @@ small {
   overflow-x: auto;
 }
 
-.mini-map-shell {
+ .mini-map-shell {
   position: absolute;
-  right: 1rem;
+  left: calc(var(--sidebar-w) + 1rem);
+  right: auto;
   bottom: calc(var(--actionbar-h) + 1rem);
+  top: auto;
   width: var(--mini-map-size);
   border-radius: 22px;
   padding: 0.7rem;
@@ -856,12 +872,25 @@ small {
   box-shadow: 0 14px 30px rgba(0,0,0,0.35);
 }
 
-.mini-map-header {
+ .mini-map-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.55rem;
   font-weight: 700;
+  cursor: grab;
+}
+
+.mini-map-shell.expanded {
+  width: min(420px, calc(100vw - 2rem));
+}
+
+.mini-map-shell.collapsed {
+  width: 170px;
+}
+
+.mini-map-shell.collapsed .mini-map-header {
+  margin-bottom: 0;
 }
 
 #miniMapCanvas {
@@ -1300,8 +1329,10 @@ small {
     border-radius: 18px;
   }
 
-  .mini-map-shell {
+    .mini-map-shell {
+    left: auto;
     right: 0.6rem;
+    top: auto;
     bottom: calc(var(--actionbar-h) + 0.6rem);
     width: var(--mini-map-size);
     padding: 0.5rem;

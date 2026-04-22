@@ -8,7 +8,17 @@ window.GrabLabUI = (() => {
 
   const state = {
     initialized: false,
-    toastTimers: new Map()
+    toastTimers: new Map(),
+    minimap: {
+      expanded: false,
+      collapsed: false,
+      dragging: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      originLeft: 0,
+      originTop: 0
+    }
   };
 
   function el(id) {
@@ -1096,25 +1106,135 @@ window.GrabLabUI = (() => {
   function bindMiniMapControls() {
     const btn = el("btnExpandMiniMap");
     const shell = el("miniMapShell");
+    const header = shell?.querySelector(".mini-map-header");
+    const canvas = el("miniMapCanvas");
 
-    if (!btn || !shell) return;
+    if (!btn || !shell || !header || !canvas) return;
+
+    function applyMiniMapState() {
+      shell.classList.toggle("expanded", state.minimap.expanded);
+      shell.classList.toggle("collapsed", state.minimap.collapsed);
+      canvas.style.display = state.minimap.collapsed ? "none" : "block";
+      btn.textContent = state.minimap.collapsed
+        ? "Open"
+        : (state.minimap.expanded ? "Shrink" : "Expand");
+    }
 
     U.on(btn, "click", () => {
-      const runtime = S.getRuntime();
-      const expanded = !Boolean(runtime?.ui?.minimapExpanded);
-
-      S.updateRuntime({
-        ui: {
-          minimapExpanded: expanded
-        }
-      });
-
-      if (expanded) {
-        shell.style.width = "380px";
+      if (state.minimap.collapsed) {
+        state.minimap.collapsed = false;
+        state.minimap.expanded = false;
+      } else if (!state.minimap.expanded) {
+        state.minimap.expanded = true;
       } else {
-        shell.style.width = "";
+        state.minimap.expanded = false;
+        state.minimap.collapsed = true;
       }
+      applyMiniMapState();
     });
+
+    U.on(header, "pointerdown", (evt) => {
+      if (evt.target === btn) return;
+      state.minimap.dragging = true;
+      state.minimap.pointerId = evt.pointerId ?? null;
+      state.minimap.startX = evt.clientX ?? 0;
+      state.minimap.startY = evt.clientY ?? 0;
+      const rect = shell.getBoundingClientRect();
+      shell.style.right = "auto";
+      shell.style.bottom = "auto";
+      shell.style.left = `${rect.left}px`;
+      shell.style.top = `${rect.top}px`;
+      state.minimap.originLeft = rect.left;
+      state.minimap.originTop = rect.top;
+      header.setPointerCapture?.(evt.pointerId);
+    });
+
+    U.on(header, "pointermove", (evt) => {
+      if (!state.minimap.dragging) return;
+      if (state.minimap.pointerId != null && evt.pointerId !== state.minimap.pointerId) return;
+      const nextLeft = state.minimap.originLeft + ((evt.clientX ?? 0) - state.minimap.startX);
+      const nextTop = state.minimap.originTop + ((evt.clientY ?? 0) - state.minimap.startY);
+      const rect = shell.getBoundingClientRect();
+      const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+      const maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+      shell.style.left = `${U.clamp(nextLeft, 8, maxLeft)}px`;
+      shell.style.top = `${U.clamp(nextTop, 8, maxTop)}px`;
+    });
+
+    function endDrag(evt) {
+      if (!state.minimap.dragging) return;
+      if (state.minimap.pointerId != null && evt.pointerId != null && evt.pointerId !== state.minimap.pointerId) return;
+      state.minimap.dragging = false;
+      state.minimap.pointerId = null;
+    }
+
+    U.on(header, "pointerup", endDrag);
+    U.on(header, "pointercancel", endDrag);
+
+    applyMiniMapState();
+  }
+
+  function bindQuickPanelButtons() {
+    const openModal = (modalId, afterOpen = null) => {
+      const btnId = {
+        inventoryModal: "btnInventory",
+        partyModal: "btnParty",
+        mapModal: "btnMap",
+        boatModal: "btnBoat",
+        baseModal: "btnBase",
+        craftModal: "btnCraft",
+        journalModal: "btnJournal",
+        dnaModal: "btnDNA",
+        breedingModal: "btnBreed",
+        fishingModal: "btnFish"
+      }[modalId];
+      const btn = btnId ? el(btnId) : null;
+      if (!btn) return;
+      U.on(btn, "click", () => {
+        M.openModal(modalId);
+        afterOpen?.();
+      });
+    };
+
+    openModal("inventoryModal", renderInventoryModal);
+    openModal("partyModal", renderPartyModal);
+    openModal("mapModal", () => {
+      renderMapModal();
+      window.GL_MAP?.drawMap?.();
+    });
+    openModal("boatModal", renderBoatModal);
+    openModal("baseModal", renderBaseModal);
+    openModal("craftModal", () => {
+      renderCraftModal();
+      window.GL_CRAFTING?.renderCraftingPanel?.();
+    });
+    openModal("journalModal", renderJournalModal);
+    openModal("dnaModal", renderDnaModal);
+    openModal("breedingModal", () => {
+      window.GL_BREEDING?.renderBreedingPanel?.();
+    });
+    openModal("fishingModal", () => {
+      renderFishingModal();
+      window.GL_FISHING?.renderFishingPanel?.();
+    });
+
+    const btnBuild = el("btnBuild");
+    if (btnBuild) {
+      U.on(btnBuild, "click", () => {
+        M.openModal("baseModal");
+        renderBaseModal();
+        window.GL_BUILD?.renderBuildPanels?.();
+      });
+    }
+
+    const btnTraps = el("btnTraps");
+    if (btnTraps) {
+      U.on(btnTraps, "click", () => {
+        S.logActivity("Trap management UI is not wired yet in this build.", "warning");
+        S.addToast("Trap UI is not wired yet.", "warning");
+        renderActivityLog();
+      });
+    }
   }
 
   function bindActionButtons() {
@@ -1295,6 +1415,7 @@ window.GrabLabUI = (() => {
     bindSettingsControls();
     bindSaveControls();
     bindMiniMapControls();
+    bindQuickPanelButtons();
     bindActionButtons();
     bindSearchInputs();
     bindCreatorInputs();

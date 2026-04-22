@@ -15,7 +15,17 @@ window.GrabLabWorld = (() => {
     cloudsOffset: 0,
     sporesOffset: 0,
     playerBob: 0,
-    hoverPulse: 0
+    hoverPulse: 0,
+    travel: {
+      active: false,
+      queuedSteps: [],
+      from: null,
+      to: null,
+      progressMs: 0,
+      stepDurationMs: 180,
+      destination: null,
+      destinationBiomeId: null
+    }
   };
 
   function getCanvas() {
@@ -71,6 +81,107 @@ window.GrabLabWorld = (() => {
       x: (tileX - startX) * size,
       y: (tileY - startY) * size,
       size
+    };
+  }
+
+
+  function buildTravelPath(fromX, fromY, toX, toY) {
+    const path = [];
+    let x = Number(fromX || 0);
+    let y = Number(fromY || 0);
+    const tx = Number(toX || 0);
+    const ty = Number(toY || 0);
+
+    while (x !== tx || y !== ty) {
+      if (CFG.WORLD.allowDiagonalMovement) {
+        if (x < tx) x += 1;
+        else if (x > tx) x -= 1;
+
+        if (y < ty) y += 1;
+        else if (y > ty) y -= 1;
+      } else if (x !== tx) {
+        x += x < tx ? 1 : -1;
+      } else if (y !== ty) {
+        y += y < ty ? 1 : -1;
+      }
+
+      path.push({ x, y });
+      if (path.length > (CFG.WORLD.worldWidthTiles + CFG.WORLD.worldHeightTiles + 8)) break;
+    }
+
+    return path;
+  }
+
+  function stopTravel() {
+    state.travel.active = false;
+    state.travel.queuedSteps = [];
+    state.travel.from = null;
+    state.travel.to = null;
+    state.travel.progressMs = 0;
+    state.travel.destination = null;
+    state.travel.destinationBiomeId = null;
+  }
+
+  function beginNextTravelStep() {
+    const world = S.getWorld();
+    const next = state.travel.queuedSteps.shift();
+    if (!next) {
+      stopTravel();
+      return false;
+    }
+
+    state.travel.active = true;
+    state.travel.from = {
+      x: Number(world.currentTileX || 0),
+      y: Number(world.currentTileY || 0)
+    };
+    state.travel.to = {
+      x: Number(next.x || 0),
+      y: Number(next.y || 0)
+    };
+    state.travel.progressMs = 0;
+    return true;
+  }
+
+  function enqueueTravelToTile(tileX, tileY, biomeId = null) {
+    const world = S.getWorld();
+    const tx = U.clamp(Number(tileX || 0), 0, CFG.WORLD.worldWidthTiles - 1);
+    const ty = U.clamp(Number(tileY || 0), 0, CFG.WORLD.worldHeightTiles - 1);
+    const path = buildTravelPath(world.currentTileX, world.currentTileY, tx, ty);
+
+    if (!path.length) {
+      stopTravel();
+      return false;
+    }
+
+    state.travel.queuedSteps = path;
+    state.travel.destination = { x: tx, y: ty };
+    state.travel.destinationBiomeId = biomeId || S.getMapTile(tx, ty)?.biomeId || world.currentBiomeId;
+    state.travel.active = false;
+    state.travel.from = null;
+    state.travel.to = null;
+    state.travel.progressMs = 0;
+
+    const tileDef = S.getMapTile(tx, ty);
+    const label = tileDef?.name || `${tx}, ${ty}`;
+    S.logActivity(`Traveling to ${label}.`, "info");
+    return beginNextTravelStep();
+  }
+
+  function getRenderedPlayerTilePos() {
+    const world = S.getWorld();
+
+    if (!state.travel.active || !state.travel.from || !state.travel.to) {
+      return {
+        x: Number(world.currentTileX || 0),
+        y: Number(world.currentTileY || 0)
+      };
+    }
+
+    const t = U.clamp(state.travel.progressMs / Math.max(1, state.travel.stepDurationMs), 0, 1);
+    return {
+      x: U.lerp(state.travel.from.x, state.travel.to.x, t),
+      y: U.lerp(state.travel.from.y, state.travel.to.y, t)
     };
   }
 
@@ -325,8 +436,8 @@ window.GrabLabWorld = (() => {
   }
 
   function drawPlayer(ctx) {
-    const world = S.getWorld();
-    const { x, y, size } = getTileRect(world.currentTileX, world.currentTileY);
+    const pos = getRenderedPlayerTilePos();
+    const { x, y, size } = getTileRect(pos.x, pos.y);
     const bob = Math.sin(state.playerBob) * 3;
 
     const px = x + size * 0.5;
@@ -564,6 +675,31 @@ window.GrabLabWorld = (() => {
     }
   }
 
+  function advanceTravel(deltaMs) {
+    if (!state.travel.active || !state.travel.from || !state.travel.to) return;
+
+    state.travel.progressMs += deltaMs;
+    if (state.travel.progressMs < state.travel.stepDurationMs) return;
+
+    const arrivingAtDestination =
+      state.travel.destination &&
+      state.travel.to.x === state.travel.destination.x &&
+      state.travel.to.y === state.travel.destination.y;
+
+    const biomeId = arrivingAtDestination
+      ? state.travel.destinationBiomeId
+      : (S.getMapTile(state.travel.to.x, state.travel.to.y)?.biomeId || S.getWorld().currentBiomeId);
+
+    S.movePlayerToTile(state.travel.to.x, state.travel.to.y, biomeId);
+
+    if (!beginNextTravelStep()) {
+      const tileDef = S.getMapTile(state.travel.destination?.x, state.travel.destination?.y);
+      const label = tileDef?.name || `${S.getWorld().currentTileX}, ${S.getWorld().currentTileY}`;
+      S.logActivity(`Arrived at ${label}.`, "success");
+      UI.renderEverything();
+    }
+  }
+
   function handleFrame(timestamp) {
     if (!state.running) return;
 
@@ -577,6 +713,7 @@ window.GrabLabWorld = (() => {
     const deltaSec = deltaMs / 1000;
 
     tickGameClock(deltaMs);
+    advanceTravel(deltaMs);
     updateWeatherDrift(deltaSec);
     maybeRotateWeather();
     maybePassiveSystems();
@@ -642,6 +779,7 @@ window.GrabLabWorld = (() => {
     U.eventBus.on("world:playerMoved", () => {
       maybeSeedCurrentTilePoi();
       drawWorld();
+      UI.renderEverything();
     });
 
     U.eventBus.on("world:changed", drawWorld);
@@ -676,7 +814,10 @@ window.GrabLabWorld = (() => {
     resizeCanvases,
     getTileRect,
     getCameraOrigin,
-    maybeSeedCurrentTilePoi
+    maybeSeedCurrentTilePoi,
+    enqueueTravelToTile,
+    getRenderedPlayerTilePos,
+    isTraveling: () => state.travel.active || state.travel.queuedSteps.length > 0
   };
 
   window.GL_WORLD = API;

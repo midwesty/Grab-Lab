@@ -6,6 +6,10 @@ window.GrabLabInput = (() => {
   const M = window.GrabLabModal;
   const A = window.GrabLabAudio;
 
+  function getWorldApi() {
+    return window.GL_WORLD || window.GrabLabWorld || null;
+  }
+
   const state = {
     initialized: false,
     pointerDown: false,
@@ -69,9 +73,11 @@ window.GrabLabInput = (() => {
 
   function canvasToTile(x, y) {
     const tileSize = CFG.WORLD.tileSize;
+    const worldApi = getWorldApi();
+    const camera = worldApi?.getCameraOrigin ? worldApi.getCameraOrigin() : { startX: 0, startY: 0 };
     return {
-      x: Math.floor(x / tileSize),
-      y: Math.floor(y / tileSize)
+      x: camera.startX + Math.floor(x / tileSize),
+      y: camera.startY + Math.floor(y / tileSize)
     };
   }
 
@@ -144,12 +150,16 @@ window.GrabLabInput = (() => {
 
     const tileDef = S.getMapTile(safeX, safeY);
     const biomeId = tileDef?.biomeId || world.currentBiomeId;
+    const worldApi = getWorldApi();
 
-    S.movePlayerToTile(safeX, safeY, biomeId);
-
-    const label = tileDef?.name || `${safeX}, ${safeY}`;
-    S.logActivity(`Moved to tile ${label}.`, "info");
-    UI.renderEverything();
+    if (worldApi?.enqueueTravelToTile) {
+      worldApi.enqueueTravelToTile(safeX, safeY, biomeId);
+    } else {
+      S.movePlayerToTile(safeX, safeY, biomeId);
+      const label = tileDef?.name || `${safeX}, ${safeY}`;
+      S.logActivity(`Moved to tile ${label}.`, "info");
+      UI.renderEverything();
+    }
   }
 
   function inspectPointOfInterest(poi) {
