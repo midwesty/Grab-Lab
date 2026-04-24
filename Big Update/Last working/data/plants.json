@@ -1,0 +1,62 @@
+[
+  {
+    "id": "reedgrass",
+    "name": "Reedgrass",
+    "biomes": ["wetland", "reed_forest", "field_station_island"],
+    "harvestItemId": "fiber_bundle",
+    "yieldMin": 1,
+    "yieldMax": 3,
+    "rarity": "common",
+    "description": "Tall marsh grass useful for fiber, rope, and basic building."
+  },
+  {
+    "id": "wild_berry_bush",
+    "name": "Wild Berry Bush",
+    "biomes": ["field_station_island", "wetland", "reed_forest"],
+    "harvestItemId": "berries_wild",
+    "yieldMin": 1,
+    "yieldMax": 4,
+    "rarity": "common",
+    "description": "A hardy berry bush that somehow still thrives out here."
+  },
+  {
+    "id": "algae_patch",
+    "name": "Algae Patch",
+    "biomes": ["river_channel", "wetland", "mudflats"],
+    "harvestItemId": "algae_bundle",
+    "yieldMin": 1,
+    "yieldMax": 3,
+    "rarity": "common",
+    "description": "Wet green growth that can be used for compost, bait blends, and questionable soups."
+  },
+  {
+    "id": "glowcap_cluster",
+    "name": "Glowcap Cluster",
+    "biomes": ["fungal_grove", "cavern_entry"],
+    "harvestItemId": "mold_sample_jar",
+    "yieldMin": 1,
+    "yieldMax": 2,
+    "rarity": "uncommon",
+    "description": "Glowing fungus useful for study and additive research."
+  },
+  {
+    "id": "bog_bulb",
+    "name": "Bog Bulb",
+    "biomes": ["wetland", "mudflats"],
+    "harvestItemId": "fresh_water",
+    "yieldMin": 1,
+    "yieldMax": 2,
+    "rarity": "uncommon",
+    "description": "A water-heavy marsh plant that can be squeezed for questionable hydration."
+  },
+  {
+    "id": "spore_bloom",
+    "name": "Spore Bloom",
+    "biomes": ["fungal_grove"],
+    "harvestItemId": "mold_sample_jar",
+    "yieldMin": 1,
+    "yieldMax": 3,
+    "rarity": "rare",
+    "description": "A dangerous fungal bloom with high research value."
+  }
+]

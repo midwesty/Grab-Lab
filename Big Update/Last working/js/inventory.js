@@ -10,18 +10,8 @@ window.GrabLabInventory = (() => {
     selectedTarget: "player",
     selectedSort: "name",
     selectedTransferSource: "player",
-    selectedTransferDestination: "base",
-    searchTerm: ""
+    selectedTransferDestination: "base"
   };
-
-  function htmlEscape(value = "") {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
 
   function getTargets() {
     return ["player", "base", "boat"];
@@ -183,64 +173,6 @@ window.GrabLabInventory = (() => {
     }
   }
 
-  function normalizeSearchTerm(value = "") {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function setSearchTerm(value = "") {
-    state.searchTerm = String(value || "");
-    syncSearchInputs();
-    renderInventoryPanel();
-    return state.searchTerm;
-  }
-
-  function getSearchTerm() {
-    return state.searchTerm || "";
-  }
-
-  function getSearchInputEls(root = document) {
-    return [
-      U.byId("inventorySearchInput"),
-      U.byId("inventorySearch"),
-      U.byId("inventoryFilterInput"),
-      U.byId("inventorySearchInputAuto"),
-      ...U.qsa(".inventory-search-input", root)
-    ].filter(Boolean);
-  }
-
-  function syncSearchInputs() {
-    const term = getSearchTerm();
-    getSearchInputEls().forEach((input) => {
-      if (input && input.value !== term) {
-        input.value = term;
-      }
-    });
-  }
-
-  function matchesSearch(entry, term = "") {
-    const needle = normalizeSearchTerm(term);
-    if (!needle) return true;
-
-    const haystack = [
-      entry?.name || "",
-      entry?.itemId || "",
-      entry?.description || "",
-      entry?.type || "",
-      ...U.toArray(entry?.tags)
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return haystack.includes(needle);
-  }
-
-  function getFilteredEntries(target = state.selectedTarget, sortMode = state.selectedSort, term = state.searchTerm) {
-    const entries = getHydratedInventory(target)
-      .filter((entry) => matchesSearch(entry, term));
-
-    return sortEntries(entries, sortMode);
-  }
-
   function getSelectedEntry() {
     return S.getRuntime()?.selectedInventoryEntry || null;
   }
@@ -340,21 +272,6 @@ window.GrabLabInventory = (() => {
     return false;
   }
 
-  function bindSearchInputs(root = document) {
-    getSearchInputEls(root).forEach((input) => {
-      if (input.dataset.inventorySearchBound === "true") return;
-      input.dataset.inventorySearchBound = "true";
-
-      U.on(input, "input", () => {
-        state.searchTerm = input.value || "";
-        syncSearchInputs();
-        renderInventoryPanel();
-      });
-    });
-
-    syncSearchInputs();
-  }
-
   function renderInventoryHeader(host) {
     const targetOptions = getTargets()
       .map((target) => `
@@ -383,18 +300,9 @@ window.GrabLabInventory = (() => {
     `).join("");
 
     host.insertAdjacentHTML("afterbegin", `
-      <div class="card inventory-header-card" style="margin-bottom:1rem;">
+      <div class="card" style="margin-bottom:1rem;">
         <div class="admin-console-actions" id="inventoryTargetButtons">${targetOptions}</div>
         <div class="admin-console-actions" id="inventorySortButtons" style="margin-top:.75rem;">${sortOptions}</div>
-        <div style="margin-top:.75rem;">
-          <input
-            id="inventorySearchInputAuto"
-            class="inventory-search-input"
-            type="text"
-            placeholder="Search inventory..."
-            value="${htmlEscape(getSearchTerm())}"
-          />
-        </div>
       </div>
     `);
 
@@ -411,8 +319,6 @@ window.GrabLabInventory = (() => {
         renderInventoryPanel();
       });
     });
-
-    bindSearchInputs(host);
   }
 
   function renderInventoryGrid(entries, target = "player") {
@@ -424,9 +330,7 @@ window.GrabLabInventory = (() => {
     if (!entries.length) {
       grid.appendChild(U.createEl("div", {
         className: "card",
-        text: getSearchTerm()
-          ? `No items in ${getTargetLabel(target)} match "${getSearchTerm()}".`
-          : `${getTargetLabel(target)} is empty.`
+        text: `${getTargetLabel(target)} is empty.`
       }));
       return;
     }
@@ -436,14 +340,10 @@ window.GrabLabInventory = (() => {
         className: "inventory-slot"
       });
 
-      const name = entry.name || U.titleCase(entry.itemId || "item");
-      slot.title = `${name}\nQty: ${entry.quantity}`;
+      slot.title = `${entry.name}\nQty: ${entry.quantity}`;
 
       slot.innerHTML = `
         <div class="icon-thumb"></div>
-        <div style="position:absolute;left:.3rem;right:.3rem;bottom:1.2rem;font-size:.68rem;line-height:1.05;text-align:center;color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.8);pointer-events:none;max-height:2.2em;overflow:hidden;">
-          ${htmlEscape(name)}
-        </div>
         <div class="qty">${htmlEscape(String(entry.quantity || 1))}</div>
       `;
 
@@ -548,26 +448,21 @@ window.GrabLabInventory = (() => {
 
     if (!grid || !detailWrap || !modalBody) return;
 
-    U.qsa(".inventory-header-card", modalBody).forEach((node) => node.remove());
+    const oldHeader = modalBody.querySelector(".card");
+    if (oldHeader && oldHeader.querySelector("#inventoryTargetButtons")) {
+      oldHeader.remove();
+    }
 
     renderInventoryHeader(modalBody);
 
-    const entries = getFilteredEntries(state.selectedTarget, state.selectedSort, state.searchTerm);
+    const entries = sortEntries(getHydratedInventory(state.selectedTarget), state.selectedSort);
     renderInventoryGrid(entries, state.selectedTarget);
 
     const current = getSelectedEntry();
-    const currentStillVisible = current && entries.some((entry) => {
-      const currentTarget = current.inventoryTarget || state.selectedTarget;
-      return currentTarget === state.selectedTarget && entry.itemId === current.itemId;
-    });
-
-    if (currentStillVisible && current && (current.inventoryTarget || state.selectedTarget) === state.selectedTarget) {
+    if (current && current.inventoryTarget === state.selectedTarget) {
       renderInventoryDetail(current, true);
       renderTransferSummary(detailWrap);
     } else {
-      if (current && !currentStillVisible) {
-        S.setSelectedInventoryEntry(null);
-      }
       renderInventoryDetail(null);
     }
   }
@@ -708,7 +603,6 @@ window.GrabLabInventory = (() => {
   function bindInventoryEvents() {
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "inventoryModal") {
-        bindSearchInputs();
         renderInventoryPanel();
       }
     });
@@ -731,7 +625,6 @@ window.GrabLabInventory = (() => {
 
     seedFallbackItemsIfNeeded();
     bindInventoryEvents();
-    bindSearchInputs();
     renderInventoryPanel();
 
     state.initialized = true;
@@ -757,10 +650,6 @@ window.GrabLabInventory = (() => {
     splitStack,
 
     sortEntries,
-    setSearchTerm,
-    getSearchTerm,
-    matchesSearch,
-    getFilteredEntries,
     getSelectedEntry,
     selectEntry,
     getItemActions,

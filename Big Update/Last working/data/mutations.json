@@ -1,0 +1,32 @@
+[
+  {
+    "id": "camouflage",
+    "name": "Camouflage",
+    "description": "Blends into surroundings and gains stealth bonuses."
+  },
+  {
+    "id": "gills",
+    "name": "Gills",
+    "description": "Allows better water movement and aquatic survival."
+  },
+  {
+    "id": "claws",
+    "name": "Claws",
+    "description": "Improves physical attack capability."
+  },
+  {
+    "id": "flight",
+    "name": "Flight",
+    "description": "Can access elevated or otherwise unreachable areas."
+  },
+  {
+    "id": "thick_shell",
+    "name": "Thick Shell",
+    "description": "Improves defense and resilience."
+  },
+  {
+    "id": "luminous",
+    "name": "Luminous",
+    "description": "Emits a gentle glow in dark areas."
+  }
+]

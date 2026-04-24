@@ -1,0 +1,34 @@
+{
+  "gameTitle": "Grab Lab",
+  "version": "0.1.0-mvp-shell",
+  "buildName": "Field Station Prototype",
+  "setting": "A fungal-ravaged river wilderness where conservationists, scavengers, and weird wildlife are humanity's last line of defense.",
+  "introText": "You arrive at Field Station Alpha with a boat, a budget problem, and entirely too much responsibility.",
+  "startingBiomeId": "field_station_island",
+  "startingNodeId": "field_station_dock",
+  "currencies": [
+    {
+      "id": "funds",
+      "name": "Funds",
+      "symbol": "$"
+    }
+  ],
+  "factions": [
+    {
+      "id": "field_station",
+      "name": "Field Station Staff"
+    },
+    {
+      "id": "wildlife",
+      "name": "Wildlife"
+    },
+    {
+      "id": "fungal_blight",
+      "name": "Fungal Blight"
+    }
+  ],
+  "notes": [
+    "This config file is mostly flavor and top-level world identity.",
+    "Core mechanical defaults still live in js/config.js."
+  ]
+}

@@ -1,0 +1,84 @@
+[
+  {
+    "id": "bandage_basic",
+    "name": "Basic Bandage",
+    "description": "A simple field dressing.",
+    "station": "workbench",
+    "durationMinutes": 10,
+    "inputs": [
+      { "itemId": "fiber_bundle", "quantity": 2 },
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "bandage_basic", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "bait_worm",
+    "name": "Prepared Worm Bait",
+    "description": "Reliable bait for river fishing.",
+    "station": "workbench",
+    "durationMinutes": 5,
+    "inputs": [
+      { "itemId": "berries_wild", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "bait_worm", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "boiled_water",
+    "name": "Boiled Water",
+    "description": "Safer water, slightly less crunchy.",
+    "station": "stove",
+    "durationMinutes": 8,
+    "inputs": [
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "clean_water", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "chameleon_juice",
+    "name": "Chameleon Juice",
+    "description": "A mutation additive for stealth-friendly offspring.",
+    "station": "workbench",
+    "durationMinutes": 15,
+    "inputs": [
+      { "itemId": "fresh_water", "quantity": 1 },
+      { "itemId": "alcohol_basic", "quantity": 1 },
+      { "itemId": "chameleon_skin", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "chameleon_juice", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "shell_powder",
+    "name": "Shell Powder",
+    "description": "Defensive breeding additive and mineral supplement.",
+    "station": "workbench",
+    "durationMinutes": 12,
+    "inputs": [
+      { "itemId": "dock_turtle_egg", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "shell_powder", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "luminous_spores",
+    "name": "Luminous Spores",
+    "description": "A glowing additive harvested from fungal bloom zones.",
+    "station": "breeding_tank",
+    "durationMinutes": 18,
+    "inputs": [
+      { "itemId": "mold_sample_jar", "quantity": 1 },
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "luminous_spores", "quantity": 1 }
+    ]
+  }
+]

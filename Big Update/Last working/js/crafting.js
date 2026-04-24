@@ -8,8 +8,7 @@ window.GrabLabCrafting = (() => {
   const state = {
     initialized: false,
     selectedRecipeId: null,
-    selectedStationFilter: "all",
-    selectedStationTarget: "base" // base | boat | all
+    selectedStationFilter: "all"
   };
 
   function getRecipes() {
@@ -41,10 +40,11 @@ window.GrabLabCrafting = (() => {
     return recipe?.station || "workbench";
   }
 
-  function getBaseBuiltStations() {
+  function getAccessibleStations() {
     const base = S.getBase();
     const structures = U.toArray(base?.structures);
-    const stationIds = new Set();
+
+    const stationIds = new Set(["workbench"]);
 
     structures.forEach((entry) => {
       const def = S.getStructureDef(entry.structureId);
@@ -52,45 +52,15 @@ window.GrabLabCrafting = (() => {
 
       U.toArray(def.stations).forEach((stationId) => stationIds.add(stationId));
       if (def.stationId) stationIds.add(def.stationId);
-      if (U.toArray(def.tags).includes("crafting")) stationIds.add(def.id);
+      if (def.tags?.includes?.("crafting")) {
+        stationIds.add(def.id);
+      }
     });
 
     if (stationIds.has("field_stove_t1")) stationIds.add("stove");
     if (stationIds.has("breeding_tank_t1")) stationIds.add("breeding_tank");
-    if (stationIds.has("workbench_t1")) stationIds.add("workbench");
 
     return [...stationIds];
-  }
-
-  function getBoatBuiltStations() {
-    const modules = U.toArray(S.getBoat()?.modules);
-    const stationIds = new Set();
-
-    modules.forEach((entry) => {
-      const def = S.getStructureDef(entry.structureId);
-      if (!def) return;
-
-      U.toArray(def.stations).forEach((stationId) => stationIds.add(stationId));
-      if (def.stationId) stationIds.add(def.stationId);
-      if (U.toArray(def.tags).includes("crafting")) stationIds.add(def.id);
-    });
-
-    if (stationIds.has("field_stove_t1")) stationIds.add("stove");
-    if (stationIds.has("breeding_tank_t1")) stationIds.add("breeding_tank");
-    if (stationIds.has("workbench_t1")) stationIds.add("workbench");
-
-    return [...stationIds];
-  }
-
-  function getAccessibleStations(target = state.selectedStationTarget || "all") {
-    const safeTarget = target || "all";
-    const baseStations = getBaseBuiltStations();
-    const boatStations = getBoatBuiltStations();
-
-    if (safeTarget === "base") return baseStations;
-    if (safeTarget === "boat") return boatStations;
-
-    return U.uniqueBy([...baseStations, ...boatStations], (x) => String(x));
   }
 
   function getInventoryAmount(itemId, source = "all") {
@@ -132,39 +102,24 @@ window.GrabLabCrafting = (() => {
       .filter((entry) => entry.missing > 0);
   }
 
-  function canUseStation(recipe, target = state.selectedStationTarget || "all") {
+  function canUseStation(recipe) {
     const station = getRecipeStation(recipe);
     if (!station || station === "none") return true;
 
-    const accessible = getAccessibleStations(target);
+    const accessible = getAccessibleStations();
     return accessible.includes(station);
   }
 
-  function getStationFailureReason(recipe, target = state.selectedStationTarget || "all") {
-    const station = getRecipeStation(recipe);
-    if (!station || station === "none") return "";
-
-    if (target === "boat") {
-      return `Required station unavailable on boat: ${station}`;
-    }
-
-    if (target === "base") {
-      return `Required station unavailable at base: ${station}`;
-    }
-
-    return `Required station unavailable: ${station}`;
-  }
-
-  function canCraft(recipeId, quantity = 1, source = "all", target = state.selectedStationTarget || "all") {
+  function canCraft(recipeId, quantity = 1, source = "all") {
     const recipe = getRecipe(recipeId);
     if (!recipe) {
       return { ok: false, reason: "Recipe not found." };
     }
 
-    if (!canUseStation(recipe, target)) {
+    if (!canUseStation(recipe)) {
       return {
         ok: false,
-        reason: getStationFailureReason(recipe, target)
+        reason: `Required station unavailable: ${getRecipeStation(recipe)}`
       };
     }
 
@@ -223,10 +178,7 @@ window.GrabLabCrafting = (() => {
     const recipe = getRecipe(recipeId);
     if (!recipe) throw new Error("Recipe not found.");
 
-    const source = options.source || "all";
-    const stationTarget = options.stationTarget || state.selectedStationTarget || "all";
-
-    const validation = canCraft(recipeId, quantity, source, stationTarget);
+    const validation = canCraft(recipeId, quantity, options.source || "all");
     if (!validation.ok) {
       throw new Error(validation.reason);
     }
@@ -238,7 +190,6 @@ window.GrabLabCrafting = (() => {
       recipeId,
       quantity: Math.max(1, Number(quantity || 1)),
       station: getRecipeStation(recipe),
-      stationTarget,
       startedAt: U.isoNow(),
       progressMinutes: 0,
       durationMinutes: getRecipeDurationMinutes(recipe),
@@ -262,10 +213,7 @@ window.GrabLabCrafting = (() => {
     const recipe = getRecipe(recipeId);
     if (!recipe) throw new Error("Recipe not found.");
 
-    const source = options.source || "all";
-    const stationTarget = options.stationTarget || state.selectedStationTarget || "all";
-
-    const validation = canCraft(recipeId, quantity, source, stationTarget);
+    const validation = canCraft(recipeId, quantity, options.source || "all");
     if (!validation.ok) throw new Error(validation.reason);
 
     removeIngredients(recipe, quantity, options.preferredSources || ["player", "base", "boat"]);
@@ -391,13 +339,10 @@ window.GrabLabCrafting = (() => {
       };
     });
 
-    const validation = canCraft(recipe.id, 1, "all", state.selectedStationTarget);
-
     return {
       recipe,
       station: getRecipeStation(recipe),
-      canCraft: validation.ok,
-      reason: validation.reason || "",
+      canCraft: canCraft(recipe.id).ok,
       inputs,
       outputs
     };
@@ -436,12 +381,6 @@ window.GrabLabCrafting = (() => {
     return state.selectedStationFilter;
   }
 
-  function setStationTarget(target = "base") {
-    state.selectedStationTarget = ["base", "boat", "all"].includes(target) ? target : "base";
-    renderCraftingPanel();
-    return state.selectedStationTarget;
-  }
-
   function htmlEscape(value = "") {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -475,7 +414,7 @@ window.GrabLabCrafting = (() => {
       card.innerHTML = `
         <div class="meta-title">${htmlEscape(recipe.name || U.titleCase(recipe.id))}</div>
         <div class="meta-sub">${htmlEscape(recipe.station || "workbench")}</div>
-        <div class="meta-sub">${data.canCraft ? "Ready to craft" : htmlEscape(data.reason || "Missing materials or station")}</div>
+        <div class="meta-sub">${data.canCraft ? "Ready to craft" : "Missing materials or station"}</div>
       `;
 
       U.on(card, "click", () => {
@@ -506,7 +445,6 @@ window.GrabLabCrafting = (() => {
       <h3>${htmlEscape(recipe.name || U.titleCase(recipe.id))}</h3>
       <p>${htmlEscape(recipe.description || "No description yet.")}</p>
       <p><strong>Station:</strong> ${htmlEscape(data.station)}</p>
-      <p><strong>Using:</strong> ${htmlEscape(U.titleCase(state.selectedStationTarget))}</p>
 
       <h4>Inputs</h4>
       <ul>
@@ -525,15 +463,9 @@ window.GrabLabCrafting = (() => {
         `).join("")}
       </ul>
 
-      ${
-        data.canCraft
-          ? `<p class="accent-text">All requirements met.</p>`
-          : `<p class="danger-text">${htmlEscape(data.reason || "Cannot craft right now.")}</p>`
-      }
-
       <div class="admin-console-actions">
-        <button id="btnCraftOnce" class="primary-btn" ${data.canCraft ? "" : "disabled"}>Craft</button>
-        <button id="btnQueueCraft" class="secondary-btn" ${data.canCraft ? "" : "disabled"}>Queue</button>
+        <button id="btnCraftOnce" class="primary-btn">Craft</button>
+        <button id="btnQueueCraft" class="secondary-btn">Queue</button>
       </div>
     `;
 
@@ -543,9 +475,7 @@ window.GrabLabCrafting = (() => {
     if (btnCraftOnce) {
       U.on(btnCraftOnce, "click", () => {
         try {
-          craftInstant(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget
-          });
+          craftInstant(recipe.id, 1);
           UI.renderEverything();
         } catch (err) {
           S.addToast(err.message || "Craft failed.", "error");
@@ -556,9 +486,7 @@ window.GrabLabCrafting = (() => {
     if (btnQueueCraft) {
       U.on(btnQueueCraft, "click", () => {
         try {
-          createCraftingJob(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget
-          });
+          createCraftingJob(recipe.id, 1);
           UI.renderEverything();
         } catch (err) {
           S.addToast(err.message || "Queue failed.", "error");
@@ -578,7 +506,6 @@ window.GrabLabCrafting = (() => {
         <div class="card" style="margin-top:.6rem;">
           <div class="meta-title">${htmlEscape(getRecipeName(job.recipeId))}</div>
           <div class="meta-sub">Progress: ${htmlEscape(String(job.progressMinutes || 0))}/${htmlEscape(String(job.durationMinutes || 0))} minutes</div>
-          <div class="meta-sub">Station: ${htmlEscape(job.station || "workbench")} • ${htmlEscape(U.titleCase(job.stationTarget || "base"))}</div>
           <div class="meta-sub">Output: ${htmlEscape(job.outputTarget || "player")}</div>
           <button class="ghost-btn crafting-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
         </div>
@@ -608,12 +535,9 @@ window.GrabLabCrafting = (() => {
     filterCard.innerHTML = `
       <div class="meta-title">Station Filter</div>
       <div class="admin-console-actions" id="craftStationFilterButtons"></div>
-      <div class="meta-title" style="margin-top:.75rem;">Use Stations From</div>
-      <div class="admin-console-actions" id="craftStationTargetButtons"></div>
     `;
 
     const buttonsHost = filterCard.querySelector("#craftStationFilterButtons");
-    const targetHost = filterCard.querySelector("#craftStationTargetButtons");
 
     stations.forEach((stationId) => {
       const btn = U.createEl("button", {
@@ -626,19 +550,6 @@ window.GrabLabCrafting = (() => {
       });
 
       buttonsHost.appendChild(btn);
-    });
-
-    ["base", "boat", "all"].forEach((targetId) => {
-      const btn = U.createEl("button", {
-        className: targetId === state.selectedStationTarget ? "secondary-btn" : "ghost-btn",
-        text: U.titleCase(targetId)
-      });
-
-      U.on(btn, "click", () => {
-        setStationTarget(targetId);
-      });
-
-      targetHost.appendChild(btn);
     });
 
     list.prepend(filterCard);
@@ -741,12 +652,6 @@ window.GrabLabCrafting = (() => {
         renderCraftingPanel();
       }
     });
-
-    U.eventBus.on("boat:changed", () => {
-      if (S.isModalOpen("craftModal")) {
-        renderCraftingPanel();
-      }
-    });
   }
 
   function init() {
@@ -772,8 +677,6 @@ window.GrabLabCrafting = (() => {
     getRecipeOutputs,
     getRecipeStation,
     getAccessibleStations,
-    getBaseBuiltStations,
-    getBoatBuiltStations,
 
     getInventoryAmount,
     hasRequiredItems,
@@ -797,7 +700,6 @@ window.GrabLabCrafting = (() => {
     filterRecipes,
     selectRecipe,
     setStationFilter,
-    setStationTarget,
 
     renderCraftingPanel,
     seedFallbackRecipesIfNeeded

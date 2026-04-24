@@ -80,5 +80,132 @@
     "outputs": [
       { "itemId": "luminous_spores", "quantity": 1 }
     ]
+  },
+  {
+    "id": "rope_bundle_from_fiber",
+    "name": "Twisted Rope Bundle",
+    "description": "Twist fresh fiber into a stronger, more useful bundle of rope.",
+    "station": "workbench",
+    "durationMinutes": 9,
+    "inputs": [
+      { "itemId": "fiber_bundle", "quantity": 3 }
+    ],
+    "outputs": [
+      { "itemId": "rope_bundle", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "patchwork_bandage",
+    "name": "Patchwork Bandage",
+    "description": "A rough field wrap made from scavenged material and clean water.",
+    "station": "workbench",
+    "durationMinutes": 11,
+    "inputs": [
+      { "itemId": "old_boot", "quantity": 1 },
+      { "itemId": "fiber_bundle", "quantity": 1 },
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "bandage_basic", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "salvaged_passive_line",
+    "name": "Salvaged Passive Line",
+    "description": "Rebuild a set-and-check fishing line from broken tackle and spare rope.",
+    "station": "workbench",
+    "durationMinutes": 14,
+    "inputs": [
+      { "itemId": "broken_lure", "quantity": 1 },
+      { "itemId": "rope_bundle", "quantity": 1 },
+      { "itemId": "fiber_bundle", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "passive_line_basic", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "frog_lure_from_shrimp",
+    "name": "Frog Lure",
+    "description": "A lively swamp lure improvised from bait-grade shrimp and field fibers.",
+    "station": "workbench",
+    "durationMinutes": 8,
+    "inputs": [
+      { "itemId": "mud_shrimp", "quantity": 1 },
+      { "itemId": "fiber_bundle", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "frog_lure", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "field_alcohol_brew",
+    "name": "Field Alcohol",
+    "description": "A crude distilled solvent useful for medicine, additives, and morale.",
+    "station": "stove",
+    "durationMinutes": 18,
+    "inputs": [
+      { "itemId": "berries_wild", "quantity": 2 },
+      { "itemId": "algae_bundle", "quantity": 1 },
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "alcohol_basic", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "bio_fuel_from_algae",
+    "name": "Bio Fuel Cell",
+    "description": "Compress algae slurry and salvage into a usable low-grade fuel cell.",
+    "station": "stove",
+    "durationMinutes": 20,
+    "inputs": [
+      { "itemId": "algae_bundle", "quantity": 2 },
+      { "itemId": "alcohol_basic", "quantity": 1 },
+      { "itemId": "scrap_wood", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "fuel_bio_basic", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "minnow_bait_mix",
+    "name": "Minnow Bait Mix",
+    "description": "Break down a small catch into something more useful for bigger fish.",
+    "station": "workbench",
+    "durationMinutes": 6,
+    "inputs": [
+      { "itemId": "mud_minnow_catch", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "bait_worm", "quantity": 2 }
+    ]
+  },
+  {
+    "id": "bog_perch_scrap",
+    "name": "Bog Perch Scrap",
+    "description": "Strip a small perch into a compact lure bait for future casts.",
+    "station": "workbench",
+    "durationMinutes": 7,
+    "inputs": [
+      { "itemId": "bog_perch_catch", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "frog_lure", "quantity": 1 }
+    ]
+  },
+  {
+    "id": "shell_wash",
+    "name": "Shell Wash",
+    "description": "A simple mineral rinse that turns shell powder into cleaner drinking water.",
+    "station": "stove",
+    "durationMinutes": 7,
+    "inputs": [
+      { "itemId": "shell_powder", "quantity": 1 },
+      { "itemId": "fresh_water", "quantity": 1 }
+    ],
+    "outputs": [
+      { "itemId": "clean_water", "quantity": 1 }
+    ]
   }
 ]

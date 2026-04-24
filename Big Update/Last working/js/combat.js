@@ -9,21 +9,11 @@ window.GrabLabCombat = (() => {
   const state = {
     initialized: false,
     selectedCommand: null,
-    selectedTargetId: null,
-    randomEncounterCooldownMs: 18000,
-    randomEncounterBaseChance: 0.11
+    selectedTargetId: null
   };
-
-  function getAnimalsApi() {
-    return window.GL_ANIMALS || window.GrabLabAnimals || null;
-  }
 
   function getCombat() {
     return S.getRuntime()?.combat || {};
-  }
-
-  function getEncounterType() {
-    return getCombat()?.encounterType || "fungal";
   }
 
   function makeActorBase(data = {}, side = "ally", kind = "ally") {
@@ -39,12 +29,6 @@ window.GrabLabCombat = (() => {
       classId: data.classId || null,
       portrait: data.portrait || null,
       level: Number(data.level || 1),
-      temperament: data.temperament || "neutral",
-      captureEligible: Boolean(data.captureEligible),
-      tameable: Boolean(data.tameable),
-      captureReady: Boolean(data.captureReady),
-      tamedInBattle: Boolean(data.tamedInBattle),
-      wildlifeRole: data.wildlifeRole || null,
       stats: {
         health: Number(stats.health ?? 40),
         maxHealth: Number(stats.maxHealth ?? 40),
@@ -74,19 +58,11 @@ window.GrabLabCombat = (() => {
     return actor && !actor.isDown && actorHp(actor) > 0;
   }
 
-  function markActorDown(actor, options = {}) {
+  function markActorDown(actor) {
     if (!actor) return;
     actor.stats.health = 0;
     actor.isDown = true;
     actor.hasActed = true;
-
-    if (options.captureReady) {
-      actor.captureReady = true;
-    }
-    if (options.tamedInBattle) {
-      actor.tamedInBattle = true;
-      actor.captureReady = true;
-    }
   }
 
   function getAllActors() {
@@ -129,7 +105,7 @@ window.GrabLabCombat = (() => {
       classId: player?.classId || "field_ranger",
       level: Number(stats?.level || 1),
       portrait: CFG.IMAGE_FALLBACKS.portraitPlayer,
-      combatMoves: ["attack", "defend", "skill", "analyze", "item", "swap"],
+      combatMoves: ["attack", "defend", "analyze", "item"],
       statusEffects: U.toArray(player?.statusEffects),
       stats: {
         health: Number(stats?.health || 100),
@@ -233,56 +209,6 @@ window.GrabLabCombat = (() => {
     }, "enemy", "enemy");
   }
 
-  function makeWildlifeActor(speciesId, options = {}) {
-    const def = S.getAnimalDef(speciesId) || {};
-    const level = Math.max(1, Number(options.level || 1));
-
-    return makeActorBase({
-      id: options.id || U.uid("wild"),
-      sourceId: speciesId,
-      speciesId,
-      classId: "wildlife",
-      name: options.name || def.name || U.titleCase(speciesId),
-      portrait: options.portrait || CFG.IMAGE_FALLBACKS.portraitCompanion,
-      level,
-      temperament: def.temperament || "wary",
-      captureEligible: true,
-      tameable: true,
-      wildlifeRole: options.wildlifeRole || "wildlife",
-      combatMoves: U.toArray(def.combatMoves).length
-        ? def.combatMoves
-        : ["attack", "defend"],
-      stats: {
-        health: Number(def.baseHealth || 24) + (level * 2),
-        maxHealth: Number(def.baseHealth || 24) + (level * 2),
-        stamina: Number(def.baseStamina || 20) + level,
-        maxStamina: Number(def.baseStamina || 20) + level,
-        attack: Number(def.baseAttack || 5),
-        defense: Number(def.baseDefense || 3),
-        speed: Number(def.baseSpeed || 5)
-      }
-    }, "enemy", "wildlife");
-  }
-
-  function getBiomeWildlifeSpecies(biome = null) {
-    const biomeId = biome || S.getCurrentMapTile()?.biomeId || S.getWorld()?.currentBiomeId || "field_station_island";
-    const defs = U.toArray(S.getData()?.animals);
-
-    const matches = defs
-      .filter((entry) => entry?.id)
-      .filter((entry) => {
-        return entry.habitat === biomeId ||
-          entry.habitatType === "general" ||
-          (biomeId === "river_channel" && entry.habitatType === "aquarium");
-      });
-
-    if (matches.length) {
-      return matches.map((entry) => entry.id);
-    }
-
-    return ["reed_hopper", "dock_turtle", "mud_minnow"];
-  }
-
   function buildEncounterEnemies(encounterId = "fungal_blight") {
     const playerLevel = P.getPlayerLevel();
     const currentTile = S.getCurrentMapTile();
@@ -314,37 +240,6 @@ window.GrabLabCombat = (() => {
     return enemies;
   }
 
-  function buildWildlifeEncounterEnemies(speciesId = null) {
-    const playerLevel = P.getPlayerLevel();
-    const currentTile = S.getCurrentMapTile();
-    const poiSpecies = U.toArray(currentTile?.pointsOfInterest)
-      .filter((poi) => poi?.speciesId && (poi?.capturable || poi?.type === "wild_animal" || poi?.type === "capturable_animal"))
-      .map((poi) => poi.speciesId);
-
-    const speciesPool = U.uniqueBy(
-      [
-        ...(speciesId ? [speciesId] : []),
-        ...poiSpecies,
-        ...getBiomeWildlifeSpecies(currentTile?.biomeId)
-      ],
-      (x) => String(x)
-    );
-
-    const chosenSpecies = speciesId || U.pick(speciesPool) || "reed_hopper";
-    const packCount = Math.max(1, chosenSpecies === "mud_minnow" ? U.randInt(2, 3) : 1);
-
-    const out = [];
-    for (let i = 0; i < packCount; i += 1) {
-      out.push(
-        makeWildlifeActor(chosenSpecies, {
-          level: Math.max(1, playerLevel + U.randInt(-1, 1))
-        })
-      );
-    }
-
-    return out;
-  }
-
   function sortActorsByInitiative(actors = []) {
     return [...actors]
       .map((actor) => ({
@@ -354,7 +249,7 @@ window.GrabLabCombat = (() => {
       .sort((a, b) => b.initiative - a.initiative);
   }
 
-  function syncCombatState(allies, enemies, encounterId = "fungal_blight", extra = {}) {
+  function syncCombatState(allies, enemies, encounterId = "fungal_blight") {
     const actors = sortActorsByInitiative([...allies, ...enemies]);
 
     S.startCombat(encounterId, {
@@ -363,10 +258,7 @@ window.GrabLabCombat = (() => {
       enemies,
       turnIndex: 0,
       round: 1,
-      log: [],
-      encounterType: extra.encounterType || "fungal",
-      captureAllowed: Boolean(extra.captureAllowed),
-      encounterMeta: extra.encounterMeta || {}
+      log: []
     });
 
     state.selectedCommand = null;
@@ -379,12 +271,7 @@ window.GrabLabCombat = (() => {
     const allies = [buildPlayerActor(), ...buildCompanionActors()];
     const enemies = options.enemies || buildEncounterEnemies(encounterId);
 
-    syncCombatState(allies, enemies, encounterId, {
-      encounterType: options.encounterType || "fungal",
-      captureAllowed: Boolean(options.captureAllowed),
-      encounterMeta: options.encounterMeta || {}
-    });
-
+    syncCombatState(allies, enemies, encounterId);
     S.pushCombatLog(`Encounter started: ${U.titleCase(encounterId)}.`);
     S.logActivity(`Combat started: ${U.titleCase(encounterId)}.`, "warning");
 
@@ -392,27 +279,8 @@ window.GrabLabCombat = (() => {
     return getCombat();
   }
 
-  function startWildlifeEncounter(speciesId = null, options = {}) {
-    const actualSpecies = speciesId || U.pick(getBiomeWildlifeSpecies()) || "reed_hopper";
-    const def = S.getAnimalDef(actualSpecies);
-    const encounterId = `wildlife_${actualSpecies}`;
-    const enemies = buildWildlifeEncounterEnemies(actualSpecies);
-
-    const combat = startEncounter(encounterId, {
-      enemies,
-      encounterType: "wildlife",
-      captureAllowed: true,
-      encounterMeta: {
-        speciesId: actualSpecies
-      }
-    });
-
-    S.pushCombatLog(`A wild ${def?.name || U.titleCase(actualSpecies)} encounter begins.`);
-    S.logActivity(`Wildlife encounter: ${def?.name || U.titleCase(actualSpecies)}.`, "warning");
-    return combat;
-  }
-
   function syncActorStateBackToArrays(actor) {
+    const combat = getCombat();
     const actors = getAllActors();
     const allies = getAllies();
     const enemies = getEnemies();
@@ -432,7 +300,7 @@ window.GrabLabCombat = (() => {
       enemies
     });
 
-    return getCombat();
+    return combat;
   }
 
   function chooseAutoTarget(side = "enemy") {
@@ -456,7 +324,7 @@ window.GrabLabCombat = (() => {
       power += 3;
     }
 
-    if (move === "heavy_strike" || move === "knockout") {
+    if (move === "heavy_strike") {
       power += 4;
     }
 
@@ -476,16 +344,13 @@ window.GrabLabCombat = (() => {
     };
   }
 
-  function applyDamage(target, amount, sourceText = "an attack", options = {}) {
+  function applyDamage(target, amount, sourceText = "an attack") {
     const dmg = Math.max(0, Number(amount || 0));
     const hp = Number(target?.stats?.health || 0);
     target.stats.health = Math.max(0, hp - dmg);
 
     if (target.stats.health <= 0) {
-      markActorDown(target, {
-        captureReady: Boolean(options.captureReady),
-        tamedInBattle: Boolean(options.tamedInBattle)
-      });
+      markActorDown(target);
       S.pushCombatLog(`${target.name} was downed by ${sourceText}.`);
     }
 
@@ -512,7 +377,7 @@ window.GrabLabCombat = (() => {
     syncActorStateBackToArrays(actor);
   }
 
-  function performAttack(attackerId, targetId, move = "attack", options = {}) {
+  function performAttack(attackerId, targetId, move = "attack") {
     const attacker = getActorById(attackerId);
     const target = getActorById(targetId);
 
@@ -521,39 +386,10 @@ window.GrabLabCombat = (() => {
     }
 
     const result = calculateDamage(attacker, target, move);
-    const dmg = applyDamage(target, result.damage, move, {
-      captureReady: Boolean(options.captureReady)
-    });
+    const dmg = applyDamage(target, result.damage, move);
 
     const critText = result.crit ? " Critical hit!" : "";
     S.pushCombatLog(`${attacker.name} used ${move} on ${target.name} for ${dmg} damage.${critText}`);
-
-    if (attacker.kind === "player") {
-      P.registerCombatAction("combat_blunt");
-    }
-
-    markActed(attacker);
-    checkBattleEnd();
-    return true;
-  }
-
-  function performKnockout(attackerId, targetId) {
-    const attacker = getActorById(attackerId);
-    const target = getActorById(targetId);
-
-    if (!attacker || !target || !isActorAlive(attacker) || !isActorAlive(target)) {
-      return false;
-    }
-
-    const wildlifeEncounter = getEncounterType() === "wildlife";
-    const captureReady = wildlifeEncounter && Boolean(target.captureEligible);
-
-    const result = calculateDamage(attacker, target, "knockout");
-    const dmg = applyDamage(target, result.damage, "knockout", {
-      captureReady
-    });
-
-    S.pushCombatLog(`${attacker.name} attempts a knockout on ${target.name} for ${dmg} damage.`);
 
     if (attacker.kind === "player") {
       P.registerCombatAction("combat_blunt");
@@ -589,45 +425,6 @@ window.GrabLabCombat = (() => {
 
     actor.hasActed = true;
     syncActorStateBackToArrays(actor);
-    nextTurn();
-    return true;
-  }
-
-  function performTame(actorId, targetId) {
-    const actor = getActorById(actorId);
-    const target = getActorById(targetId);
-
-    if (!actor || !target || !isActorAlive(actor) || !isActorAlive(target)) return false;
-
-    if (getEncounterType() !== "wildlife" || !target.tameable) {
-      S.pushCombatLog(`${actor.name} can't tame that target.`);
-      actor.hasActed = true;
-      syncActorStateBackToArrays(actor);
-      nextTurn();
-      return false;
-    }
-
-    const observation = P.getSkillLevel?.("observation") || 0;
-    const breeding = P.getSkillLevel?.("breeding") || 0;
-    const healthFactor = 1 - (actorHp(target) / Math.max(1, actorMaxHp(target)));
-    const chance = U.clamp(0.18 + (healthFactor * 0.45) + (observation * 0.015) + (breeding * 0.01), 0.08, 0.9);
-
-    if (Math.random() < chance) {
-      markActorDown(target, {
-        captureReady: true,
-        tamedInBattle: true
-      });
-      S.pushCombatLog(`${actor.name} successfully tamed ${target.name}!`);
-      if (actor.kind === "player") {
-        P.registerBreedAction?.();
-      }
-    } else {
-      S.pushCombatLog(`${actor.name} fails to tame ${target.name}. It remains wary.`);
-    }
-
-    actor.hasActed = true;
-    syncActorStateBackToArrays(actor);
-    checkBattleEnd();
     nextTurn();
     return true;
   }
@@ -685,10 +482,10 @@ window.GrabLabCombat = (() => {
       defending: false
     }));
 
-    const sorted = sortActorsByInitiative(actors);
-    const allies = sorted.filter((actor) => actor.side === "ally");
-    const enemies = sorted.filter((actor) => actor.side === "enemy");
+    const allies = actors.filter((actor) => actor.side === "ally");
+    const enemies = actors.filter((actor) => actor.side === "enemy");
 
+    const sorted = sortActorsByInitiative(actors);
     S.setCombatState({
       actors: sorted,
       allies,
@@ -697,7 +494,7 @@ window.GrabLabCombat = (() => {
       round: Number(getCombat()?.round || 1) + 1
     });
 
-    S.pushCombatLog(`Round ${Number(getCombat()?.round || 1)} begins.`);
+    S.pushCombatLog(`Round ${getCombat()?.round || 1} begins.`);
   }
 
   function nextTurn() {
@@ -748,7 +545,7 @@ window.GrabLabCombat = (() => {
 
       const move = U.pick(actor.combatMoves) || "attack";
 
-      if (move === "defend" || move === "shell_guard") {
+      if (move === "defend") {
         performDefend(actor.id);
         return;
       }
@@ -762,27 +559,16 @@ window.GrabLabCombat = (() => {
     const actor = getCurrentActor();
     if (!actor || actor.side !== "ally" || !isActorAlive(actor)) return false;
 
-    const currentEncounterType = getEncounterType();
     const target =
       targetId ||
       state.selectedTargetId ||
-      chooseAutoTarget("enemy")?.id ||
-      null;
+      (command === "analyze" ? chooseAutoTarget("enemy")?.id : chooseAutoTarget("enemy")?.id);
 
     switch (command) {
       case "attack":
-        if (!target) return false;
-        performAttack(actor.id, target, "attack");
-        nextTurn();
-        return true;
-
       case "skill":
         if (!target) return false;
-        if (currentEncounterType === "wildlife") {
-          performKnockout(actor.id, target);
-        } else {
-          performAttack(actor.id, target, "heavy_strike");
-        }
+        performAttack(actor.id, target, command === "skill" ? "heavy_strike" : "attack");
         nextTurn();
         return true;
 
@@ -792,22 +578,7 @@ window.GrabLabCombat = (() => {
 
       case "analyze":
         if (!target) return false;
-        if (currentEncounterType === "wildlife") {
-          performTame(actor.id, target);
-        } else {
-          performAnalyze(actor.id, target);
-        }
-        return true;
-
-      case "tame":
-        if (!target) return false;
-        performTame(actor.id, target);
-        return true;
-
-      case "knockout":
-        if (!target) return false;
-        performKnockout(actor.id, target);
-        nextTurn();
+        performAnalyze(actor.id, target);
         return true;
 
       case "item":
@@ -840,63 +611,8 @@ window.GrabLabCombat = (() => {
     return false;
   }
 
-  function captureWildlifeResults() {
-    const AN = getAnimalsApi();
-    if (!AN) return [];
-
-    const captured = [];
-
-    getEnemies()
-      .filter((enemy) => enemy?.speciesId && (enemy.captureReady || enemy.tamedInBattle || enemy.isDown))
-      .forEach((enemy) => {
-        try {
-          const specimen = AN.captureAnimal(enemy.speciesId, {
-            method: enemy.tamedInBattle ? "tame_encounter" : "combat_capture",
-            name: enemy.name || (S.getAnimalDef(enemy.speciesId)?.name || U.titleCase(enemy.speciesId)),
-            level: enemy.level || 1,
-            notes: enemy.tamedInBattle
-              ? "Tamed during a wildlife encounter."
-              : "Secured after a wildlife encounter."
-          });
-
-          if (specimen) {
-            captured.push(specimen);
-          }
-        } catch (err) {
-          console.warn("Failed to capture wildlife result:", err);
-        }
-      });
-
-    return captured;
-  }
-
   function handleVictory() {
     const enemies = getEnemies();
-    const encounterType = getEncounterType();
-
-    if (encounterType === "wildlife") {
-      const captured = captureWildlifeResults();
-      const totalXp = enemies.reduce((sum, enemy) => sum + 8 + (Number(enemy.level || 1) * 3), 0);
-
-      P.awardPlayerXp(totalXp, "wildlife encounter");
-      syncPlayerStatsFromCombat();
-
-      if (captured.length) {
-        S.pushCombatLog(`Encounter resolved. Captured: ${captured.map((entry) => entry.name).join(", ")}.`);
-        S.logActivity(`Wildlife encounter resolved. Captured ${captured.length} specimen(s).`, "success");
-        S.addToast(`Captured ${captured.length} creature${captured.length === 1 ? "" : "s"}!`, "success");
-      } else {
-        S.pushCombatLog("Wildlife encounter resolved, but nothing was secured.");
-        S.logActivity("Wildlife encounter ended with no captures.", "info");
-      }
-
-      S.endCombat("victory");
-      UI.showScreen("game");
-      UI.renderEverything();
-      A.playMusic("exploration").catch?.(() => {});
-      return;
-    }
-
     const totalXp = enemies.reduce((sum, enemy) => sum + 10 + (Number(enemy.level || 1) * 4), 0);
     const money = enemies.reduce((sum) => sum + U.randInt(3, 10), 0);
 
@@ -947,42 +663,21 @@ window.GrabLabCombat = (() => {
     return true;
   }
 
-  function getCommandDisplayLabel(command) {
-    const encounterType = getEncounterType();
-
-    if (encounterType === "wildlife") {
-      if (command === "skill") return "Knockout";
-      if (command === "analyze") return "Tame Attempt";
-    }
-
-    if (command === "skill") return "Heavy Strike";
-    return U.titleCase(command || "None");
-  }
-
   function renderCombatDetail(command = null, targetId = null) {
     const panel = U.byId("combatDetailPanel");
     if (!panel) return;
 
     const target = targetId ? getActorById(targetId) : chooseAutoTarget("enemy");
-    const encounterType = getEncounterType();
-
     const targetHtml = target
       ? `
         <p><strong>Target:</strong> ${htmlEscape(target.name)}</p>
         <p><strong>HP:</strong> ${target.stats.health}/${target.stats.maxHealth}</p>
         <p><strong>ATK/DEF/SPD:</strong> ${target.stats.attack}/${target.stats.defense}/${target.stats.speed}</p>
-        ${target.captureEligible ? `<p><strong>Capturable:</strong> Yes</p>` : ""}
       `
       : `<p>No target selected.</p>`;
 
-    const contextualHint =
-      encounterType === "wildlife"
-        ? `<p class="accent-text"><strong>Wildlife Rules:</strong> Skill = Knockout, Analyze = Tame Attempt.</p>`
-        : `<p class="meta-sub">Standard hostile combat.</p>`;
-
     panel.innerHTML = `
-      <p><strong>Command:</strong> ${htmlEscape(getCommandDisplayLabel(command || "None"))}</p>
-      ${contextualHint}
+      <p><strong>Command:</strong> ${htmlEscape(command || "None")}</p>
       ${targetHtml}
       <div class="admin-console-actions">
         <button id="btnCombatConfirm" class="primary-btn">Confirm</button>
@@ -1015,7 +710,7 @@ window.GrabLabCombat = (() => {
 
     const wireSlots = (root, side) => {
       U.qsa(".battle-slot", root).forEach((slot, idx) => {
-        const actor = side === "enemy" ? getEnemies()[idx] : [buildPlayerActor(), ...getAllies()][idx];
+        const actor = side === "enemy" ? getEnemies()[idx] : [makeActorBase(), ...getAllies()][idx];
         if (!actor) return;
 
         U.on(slot, "click", () => {
@@ -1050,47 +745,6 @@ window.GrabLabCombat = (() => {
     });
   }
 
-  function getEncounterRollChance() {
-    const biome = S.getCurrentMapTile()?.biomeId || S.getWorld()?.currentBiomeId || "field_station_island";
-
-    if (biome === "fungal_grove") return 0.16;
-    if (biome === "wetland") return 0.12;
-    if (biome === "river_channel") return 0.1;
-    return state.randomEncounterBaseChance;
-  }
-
-  function maybeTriggerRandomEncounter() {
-    if (S.getCurrentScreen?.() === "combat") return false;
-    if (getCombat()?.actors?.length) return false;
-
-    const lastAt = Number(S.getRuntime()?.timers?.lastRandomEncounterAt || 0);
-    const now = Date.now();
-    if (now - lastAt < state.randomEncounterCooldownMs) return false;
-
-    if (Math.random() > getEncounterRollChance()) return false;
-
-    const biome = S.getCurrentMapTile()?.biomeId || S.getWorld()?.currentBiomeId || "field_station_island";
-    const wildlifeBias = biome === "river_channel" || biome === "wetland" || biome === "mudflats";
-    const useWildlife = wildlifeBias ? Math.random() < 0.55 : Math.random() < 0.28;
-
-    if (typeof S.setRuntimeTimer === "function") {
-      S.setRuntimeTimer("lastRandomEncounterAt", now);
-    } else {
-      const timers = U.deepMerge({}, S.getRuntime()?.timers || {}, {
-        lastRandomEncounterAt: now
-      });
-      S.updateRuntime({ timers });
-    }
-
-    if (useWildlife) {
-      startWildlifeEncounter();
-    } else {
-      startRandomEncounter();
-    }
-
-    return true;
-  }
-
   function bindCombatEvents() {
     U.eventBus.on("combat:started", () => {
       UI.renderCombatShell();
@@ -1104,10 +758,6 @@ window.GrabLabCombat = (() => {
       renderBattlefieldSelections();
       bindCombatButtons();
     });
-
-    U.eventBus.on("world:playerMoved", () => {
-      maybeTriggerRandomEncounter();
-    });
   }
 
   function startRandomEncounter() {
@@ -1119,10 +769,7 @@ window.GrabLabCombat = (() => {
       biome === "wetland" ? "fungal_blight" :
       "fungal_blight";
 
-    return startEncounter(encounterId, {
-      encounterType: "fungal",
-      captureAllowed: false
-    });
+    return startEncounter(encounterId);
   }
 
   function init() {
@@ -1142,22 +789,17 @@ window.GrabLabCombat = (() => {
     getEnemies,
     getActorById,
     getCurrentActor,
-    getEncounterType,
     startEncounter,
     startRandomEncounter,
-    startWildlifeEncounter,
     handlePlayerCommand,
     nextTurn,
     performAttack,
-    performKnockout,
-    performTame,
     performDefend,
     performAnalyze,
     performItem,
     performSwap,
     checkBattleEnd,
-    syncPlayerStatsFromCombat,
-    maybeTriggerRandomEncounter
+    syncPlayerStatsFromCombat
   };
 
   window.GL_COMBAT = API;

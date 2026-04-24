@@ -1,0 +1,36 @@
+[
+  {
+    "id": "wetland_observer",
+    "name": "Wetland Observer",
+    "description": "Field naturalist trained in tracking species, documenting habitats, and surviving mud.",
+    "starterBonuses": {
+      "observation": 1,
+      "foraging": 1
+    }
+  },
+  {
+    "id": "field_ranger",
+    "name": "Field Ranger",
+    "description": "Generalist survivalist with better combat and exploration endurance.",
+    "starterBonuses": {
+      "combat_blunt": 1,
+      "harvesting": 1
+    }
+  },
+  {
+    "id": "river_angler",
+    "name": "River Angler",
+    "description": "Specialist in fishing, bait prep, and reading water conditions.",
+    "starterBonuses": {
+      "fishing": 2
+    }
+  },
+  {
+    "id": "breeding_tech",
+    "name": "Breeding Tech",
+    "description": "Underpaid gene splicer trying to keep life weird but useful.",
+    "starterBonuses": {
+      "breeding": 2
+    }
+  }
+]

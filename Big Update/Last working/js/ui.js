@@ -8,7 +8,6 @@ window.GrabLabUI = (() => {
 
   const state = {
     initialized: false,
-    baseModalMode: "base", // base | build | traps
     toastTimers: new Map(),
     minimap: {
       expanded: false,
@@ -24,10 +23,6 @@ window.GrabLabUI = (() => {
 
   function el(id) {
     return U.byId(id);
-  }
-
-  function getBuildApi() {
-    return window.GL_BUILD || window.GrabLabBuild || null;
   }
 
   function htmlEscape(value = "") {
@@ -538,12 +533,6 @@ window.GrabLabUI = (() => {
   }
 
   function renderBoatModal() {
-    const buildApi = getBuildApi();
-    if (buildApi?.renderBoatPanelEnhancements) {
-      buildApi.renderBoatPanelEnhancements();
-      return;
-    }
-
     const statsEl = el("boatStats");
     const upgradesEl = el("boatUpgradeList");
     if (!statsEl || !upgradesEl) return;
@@ -565,28 +554,6 @@ window.GrabLabUI = (() => {
   }
 
   function renderBaseModal() {
-    const buildApi = getBuildApi();
-
-    if (buildApi) {
-      if (state.baseModalMode === "build" && buildApi.renderBuildPanels) {
-        buildApi.renderBuildPanels();
-        return;
-      }
-
-      if (buildApi.renderBaseEnhancements) {
-        buildApi.renderBaseEnhancements();
-
-        if (state.baseModalMode === "traps") {
-          window.setTimeout(() => {
-            const trapSection = el("baseTrapCards");
-            trapSection?.scrollIntoView?.({ behavior: "smooth", block: "start" });
-          }, 0);
-        }
-
-        return;
-      }
-    }
-
     const host = el("basePanelContent");
     if (!host) return;
 
@@ -948,147 +915,14 @@ window.GrabLabUI = (() => {
     });
   }
 
-  function getCreatorColorValue(colorName = "") {
-    const normalized = String(colorName || "").trim().toLowerCase();
-
-    const map = {
-      brown: "#5c3b24",
-      black: "#171717",
-      blonde: "#d7b65f",
-      red: "#93452f",
-      gray: "#7d8287",
-      green: "#4f7b57"
-    };
-
-    return map[normalized] || "#5c3b24";
-  }
-
-  function getCreatorOutfitValue(outfitName = "") {
-    const normalized = String(outfitName || "").trim().toLowerCase();
-
-    const map = {
-      "field greens": "#6e9a5e",
-      "dock wear": "#59718d",
-      "rain gear": "#d1bb4a",
-      "utility overalls": "#7f6f5f",
-      "warden vest": "#4f8662"
-    };
-
-    return map[normalized] || "#6e9a5e";
-  }
-
-  function getHairShapeCss(styleName = "") {
-    const normalized = String(styleName || "").trim().toLowerCase();
-
-    switch (normalized) {
-      case "messy":
-        return "radial-gradient(circle at 50% 19%, rgba(255,255,255,0.05) 0 2%, transparent 2.2%), radial-gradient(ellipse at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 13%, transparent 13.4%), radial-gradient(circle at 40% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 5.2%, transparent 5.4%), radial-gradient(circle at 61% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.8%, transparent 5.1%)";
-      case "long":
-        return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 12.5%, transparent 12.9%), linear-gradient(180deg, transparent 0 23%, var(--creator-hair-color, rgba(62,37,15,0.92)) 23% 46%, transparent 46.4%)";
-      case "ponytail":
-        return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 12%, transparent 12.4%), radial-gradient(ellipse at 72% 27%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 6%, transparent 6.4%)";
-      case "shaved":
-        return "radial-gradient(circle at 50% 19%, rgba(70,52,39,0.35) 0 10.5%, transparent 10.9%)";
-      case "field disaster":
-        return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 11.7%, transparent 12.1%), radial-gradient(circle at 33% 18%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4%, transparent 4.4%), radial-gradient(circle at 66% 15%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.5%, transparent 4.9%), radial-gradient(circle at 57% 11%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 2.4%, transparent 2.7%)";
-      case "short":
-      default:
-        return "radial-gradient(circle at 50% 22%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 12%, transparent 12.4%)";
-    }
-  }
-
-  function getAccessoryCss(specialtyName = "", traitA = "", traitB = "") {
-    const specialty = String(specialtyName || "").trim().toLowerCase();
-    const traits = [traitA, traitB].map((x) => String(x || "").trim().toLowerCase());
-
-    if (specialty === "fishing") {
-      return "radial-gradient(circle at 62% 41%, rgba(126,200,255,0.95) 0 2.6%, transparent 3%), linear-gradient(180deg, transparent 0 38%, rgba(126,200,255,0.12) 38% 40%, transparent 40.2%)";
-    }
-
-    if (specialty === "trapping") {
-      return "radial-gradient(circle at 62% 41%, rgba(255, 209, 102, 0.92) 0 2.8%, transparent 3.2%), linear-gradient(180deg, transparent 0 52%, rgba(255, 209, 102, 0.14) 52% 54%, transparent 54.2%)";
-    }
-
-    if (specialty === "foraging") {
-      return "radial-gradient(circle at 62% 41%, rgba(130, 209, 115, 0.92) 0 2.8%, transparent 3.2%)";
-    }
-
-    if (specialty === "breeding") {
-      return "radial-gradient(circle at 62% 41%, rgba(215, 124, 255, 0.9) 0 2.8%, transparent 3.2%)";
-    }
-
-    if (traits.includes("weird_luck")) {
-      return "radial-gradient(circle at 62% 41%, rgba(255, 214, 102, 0.88) 0 2.6%, transparent 3%)";
-    }
-
-    return "radial-gradient(circle at 62% 41%, rgba(255, 214, 102, 0.88) 0 2.6%, transparent 3%)";
-  }
-
-  function applyCreatorAvatarVisuals() {
-    const preview = el("creatorPreviewAvatar") || document.querySelector(".avatar-preview");
-    if (!preview) return;
-
-    const hairLayer =
-      preview.querySelector(".avatar-hair") ||
-      document.querySelector(".avatar-hair");
-
-    const outfitLayer =
-      preview.querySelector(".avatar-outfit") ||
-      document.querySelector(".avatar-outfit");
-
-    const accessoryLayer =
-      preview.querySelector(".avatar-accessory") ||
-      document.querySelector(".avatar-accessory");
-
-    const hairStyle = el("creatorHairStyle")?.value || "Short";
-    const hairColor = el("creatorHairColor")?.value || "Brown";
-    const outfit = el("creatorOutfit")?.value || "Field Greens";
-    const specialty = el("creatorSpecialty")?.selectedOptions?.[0]?.textContent || "Fishing";
-    const traitA = el("creatorTraitA")?.value || "";
-    const traitB = el("creatorTraitB")?.value || "";
-
-    const hairColorCss = getCreatorColorValue(hairColor);
-    const outfitColorCss = getCreatorOutfitValue(outfit);
-    const hairBg = getHairShapeCss(hairStyle);
-    const accessoryBg = getAccessoryCss(specialty, traitA, traitB);
-
-    preview.style.setProperty("--creator-hair-color", hairColorCss);
-    preview.style.setProperty("--creator-outfit-color", outfitColorCss);
-
-    preview.dataset.hairStyle = hairStyle;
-    preview.dataset.hairColor = hairColor;
-    preview.dataset.outfit = outfit;
-    preview.dataset.specialty = specialty;
-
-    if (hairLayer) {
-      hairLayer.style.background = hairBg;
-    }
-
-    if (outfitLayer) {
-      outfitLayer.style.background = `linear-gradient(180deg, transparent 0 45%, ${outfitColorCss} 45% 68%, transparent 68%)`;
-    }
-
-    if (accessoryLayer) {
-      accessoryLayer.style.background = accessoryBg;
-    }
-  }
-
   function updateCreatorPreview() {
     const name = el("creatorName")?.value?.trim() || CFG.PLAYER.startingName;
     const background = el("creatorBackground")?.selectedOptions?.[0]?.textContent || "Remote Wetlands Field Station";
     const specialty = el("creatorSpecialty")?.selectedOptions?.[0]?.textContent || "Fishing";
-    const hairStyle = el("creatorHairStyle")?.value || "Short";
-    const hairColor = el("creatorHairColor")?.value || "Brown";
-    const outfit = el("creatorOutfit")?.value || "Field Greens";
 
     U.setText(el("previewName"), name);
     U.setText(el("previewOrigin"), background);
-    U.setText(
-      el("previewSummary"),
-      `Specialty: ${specialty}. ${hairStyle} hair in ${hairColor}. Outfit: ${outfit}.`
-    );
-
-    applyCreatorAvatarVisuals();
+    U.setText(el("previewSummary"), `Specialty: ${specialty}. Somehow still considered a professional.`);
   }
 
   function renderEverything() {
@@ -1164,21 +998,13 @@ window.GrabLabUI = (() => {
         const specialtyId = el("creatorSpecialty")?.value || CFG.PLAYER.startingSpecialty;
         const traitA = el("creatorTraitA")?.value || CFG.PLAYER.startingTraits[0];
         const traitB = el("creatorTraitB")?.value || CFG.PLAYER.startingTraits[1];
-        const hairStyle = el("creatorHairStyle")?.value || "Short";
-        const hairColor = el("creatorHairColor")?.value || "Brown";
-        const outfit = el("creatorOutfit")?.value || "Field Greens";
 
         S.setPlayer({
           ...S.getPlayer(),
           name,
           backgroundId,
           specialtyId,
-          traits: U.uniqueBy([traitA, traitB], (x) => x),
-          appearance: {
-            hairStyle,
-            hairColor,
-            outfit
-          }
+          traits: U.uniqueBy([traitA, traitB], (x) => x)
         });
 
         S.revealTile(S.getWorld().currentTileX, S.getWorld().currentTileY);
@@ -1355,6 +1181,7 @@ window.GrabLabUI = (() => {
         partyModal: "btnParty",
         mapModal: "btnMap",
         boatModal: "btnBoat",
+        baseModal: "btnBase",
         craftModal: "btnCraft",
         journalModal: "btnJournal",
         dnaModal: "btnDNA",
@@ -1376,7 +1203,9 @@ window.GrabLabUI = (() => {
       window.GL_MAP?.drawMap?.();
     });
     openModal("boatModal", renderBoatModal);
+    openModal("baseModal", renderBaseModal);
     openModal("craftModal", () => {
+      renderCraftModal();
       window.GL_CRAFTING?.renderCraftingPanel?.();
     });
     openModal("journalModal", renderJournalModal);
@@ -1385,33 +1214,25 @@ window.GrabLabUI = (() => {
       window.GL_BREEDING?.renderBreedingPanel?.();
     });
     openModal("fishingModal", () => {
+      renderFishingModal();
       window.GL_FISHING?.renderFishingPanel?.();
     });
-
-    const btnBase = el("btnBase");
-    if (btnBase) {
-      U.on(btnBase, "click", () => {
-        state.baseModalMode = "base";
-        M.openModal("baseModal");
-        renderBaseModal();
-      });
-    }
 
     const btnBuild = el("btnBuild");
     if (btnBuild) {
       U.on(btnBuild, "click", () => {
-        state.baseModalMode = "build";
         M.openModal("baseModal");
         renderBaseModal();
+        window.GL_BUILD?.renderBuildPanels?.();
       });
     }
 
     const btnTraps = el("btnTraps");
     if (btnTraps) {
       U.on(btnTraps, "click", () => {
-        state.baseModalMode = "traps";
-        M.openModal("baseModal");
-        renderBaseModal();
+        S.logActivity("Trap management UI is not wired yet in this build.", "warning");
+        S.addToast("Trap UI is not wired yet.", "warning");
+        renderActivityLog();
       });
     }
   }

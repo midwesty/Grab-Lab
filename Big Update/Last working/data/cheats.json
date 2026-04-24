@@ -1,0 +1,60 @@
+[
+  {
+    "id": "starter_pack",
+    "name": "Starter Pack",
+    "description": "Adds basic survival resources and tools.",
+    "effects": [
+      { "type": "item", "itemId": "berries_wild", "quantity": 6, "target": "player" },
+      { "type": "item", "itemId": "fresh_water", "quantity": 6, "target": "player" },
+      { "type": "item", "itemId": "fiber_bundle", "quantity": 8, "target": "base" },
+      { "type": "item", "itemId": "scrap_wood", "quantity": 8, "target": "base" },
+      { "type": "item", "itemId": "bait_worm", "quantity": 6, "target": "player" }
+    ]
+  },
+  {
+    "id": "fishing_pack",
+    "name": "Fishing Pack",
+    "description": "Adds fishing tools and bait.",
+    "effects": [
+      { "type": "item", "itemId": "fishing_pole_basic", "quantity": 1, "target": "player" },
+      { "type": "item", "itemId": "fishing_net_basic", "quantity": 1, "target": "player" },
+      { "type": "item", "itemId": "passive_line_basic", "quantity": 1, "target": "boat" },
+      { "type": "item", "itemId": "bait_worm", "quantity": 10, "target": "player" }
+    ]
+  },
+  {
+    "id": "breeding_pack",
+    "name": "Breeding Pack",
+    "description": "Adds additives and sample resources for breeding tests.",
+    "effects": [
+      { "type": "item", "itemId": "chameleon_juice", "quantity": 2, "target": "player" },
+      { "type": "item", "itemId": "luminous_spores", "quantity": 2, "target": "player" },
+      { "type": "item", "itemId": "shell_powder", "quantity": 2, "target": "player" },
+      { "type": "item", "itemId": "mold_sample_jar", "quantity": 3, "target": "player" }
+    ]
+  },
+  {
+    "id": "structure_pack",
+    "name": "Structure Pack",
+    "description": "Adds building resources for quick expansion.",
+    "effects": [
+      { "type": "item", "itemId": "scrap_wood", "quantity": 25, "target": "base" },
+      { "type": "item", "itemId": "fiber_bundle", "quantity": 20, "target": "base" },
+      { "type": "item", "itemId": "rope_bundle", "quantity": 8, "target": "base" },
+      { "type": "item", "itemId": "fresh_water", "quantity": 6, "target": "base" }
+    ]
+  },
+  {
+    "id": "wildlife_pack",
+    "name": "Wildlife Pack",
+    "description": "Reference pack for admin spawning tests.",
+    "spawnSpecies": [
+      "mud_minnow",
+      "reed_hopper",
+      "dock_turtle",
+      "mire_fox",
+      "spore_moth",
+      "bog_crab"
+    ]
+  }
+]

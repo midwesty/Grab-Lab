@@ -1,0 +1,324 @@
+[
+  {
+    "id": "berries_wild",
+    "name": "Wild Berries",
+    "description": "A little sour, a little suspicious, still technically food.",
+    "tags": ["food"],
+    "usable": true,
+    "weight": 1,
+    "value": 2,
+    "effects": [
+      { "stat": "hunger", "value": 8 }
+    ]
+  },
+  {
+    "id": "fresh_water",
+    "name": "Fresh Water",
+    "description": "Water. Pretty important, honestly.",
+    "tags": ["drink"],
+    "usable": true,
+    "weight": 1,
+    "value": 1,
+    "effects": [
+      { "stat": "thirst", "value": 12 }
+    ]
+  },
+  {
+    "id": "clean_water",
+    "name": "Clean Water",
+    "description": "Boiled, cleaner, slightly less risky.",
+    "tags": ["drink"],
+    "usable": true,
+    "weight": 1,
+    "value": 2,
+    "effects": [
+      { "stat": "thirst", "value": 16 }
+    ]
+  },
+  {
+    "id": "bandage_basic",
+    "name": "Basic Bandage",
+    "description": "A simple dressing for small injuries.",
+    "tags": ["medicine"],
+    "usable": true,
+    "weight": 1,
+    "value": 6,
+    "effects": [
+      { "stat": "health", "value": 16 }
+    ]
+  },
+  {
+    "id": "field_knife",
+    "name": "Field Knife",
+    "description": "Handy for cutting, carving, and looking vaguely prepared.",
+    "tags": ["tool", "weapon"],
+    "equippableSlots": ["mainHand"],
+    "weight": 1,
+    "value": 14
+  },
+  {
+    "id": "fishing_pole_basic",
+    "name": "Basic Fishing Pole",
+    "description": "A humble pole for catching humble fish.",
+    "tags": ["tool", "fishing"],
+    "equippableSlots": ["mainHand"],
+    "weight": 2,
+    "value": 12
+  },
+  {
+    "id": "fishing_net_basic",
+    "name": "Basic Fishing Net",
+    "description": "A simple net for scooping up smaller catches.",
+    "tags": ["tool", "fishing"],
+    "weight": 2,
+    "value": 14
+  },
+  {
+    "id": "passive_line_basic",
+    "name": "Passive Fishing Line",
+    "description": "A set-and-check fishing line for passive catches.",
+    "tags": ["tool", "fishing"],
+    "weight": 1,
+    "value": 10
+  },
+  {
+    "id": "bait_worm",
+    "name": "Worm Bait",
+    "description": "Irresistible to fish. Less appealing to everyone else.",
+    "tags": ["bait", "fishing"],
+    "weight": 1,
+    "value": 2
+  },
+  {
+    "id": "scrap_wood",
+    "name": "Scrap Wood",
+    "description": "Warped but still useful wood pieces.",
+    "tags": ["resource", "building"],
+    "weight": 2,
+    "value": 2
+  },
+  {
+    "id": "fiber_bundle",
+    "name": "Fiber Bundle",
+    "description": "Plant fibers for building and crafting.",
+    "tags": ["resource"],
+    "weight": 1,
+    "value": 2
+  },
+  {
+    "id": "rope_bundle",
+    "name": "Rope Bundle",
+    "description": "Simple rope for building, traps, and boat work.",
+    "tags": ["resource", "building"],
+    "weight": 1,
+    "value": 4
+  },
+  {
+    "id": "mold_sample_jar",
+    "name": "Mold Sample Jar",
+    "description": "Used to collect fungal samples for study or alarming accidents.",
+    "tags": ["resource", "quest"],
+    "weight": 1,
+    "value": 8
+  },
+  {
+    "id": "fuel_bio_basic",
+    "name": "Bio Fuel Cell",
+    "description": "A cheap fuel source for the station boat.",
+    "tags": ["resource"],
+    "weight": 2,
+    "value": 10
+  },
+  {
+    "id": "alcohol_basic",
+    "name": "Field Alcohol",
+    "description": "Sanitizes, preserves, and occasionally improves morale.",
+    "tags": ["drink", "resource"],
+    "usable": true,
+    "weight": 1,
+    "value": 7,
+    "effects": [
+      { "stat": "morale", "value": 6 },
+      { "stat": "focus", "value": -2 }
+    ]
+  },
+  {
+    "id": "chameleon_skin",
+    "name": "Shredded Chameleon Skin",
+    "description": "Used in breeding additives with stealth properties.",
+    "tags": ["resource", "additive"],
+    "weight": 1,
+    "value": 8
+  },
+  {
+    "id": "chameleon_juice",
+    "name": "Chameleon Juice",
+    "description": "A breeding additive that nudges offspring toward camouflage.",
+    "tags": ["additive"],
+    "weight": 1,
+    "value": 15,
+    "breedingEffects": {
+      "preferredTraits": ["camouflage"],
+      "preferredMutations": ["camouflage"],
+      "mutationBonus": 0.05,
+      "note": "Boosts stealthy outcomes."
+    }
+  },
+  {
+    "id": "luminous_spores",
+    "name": "Luminous Spores",
+    "description": "A volatile additive associated with glow traits and weird outcomes.",
+    "tags": ["additive"],
+    "weight": 1,
+    "value": 18,
+    "breedingEffects": {
+      "preferredTraits": ["luminous"],
+      "preferredMutations": ["luminous"],
+      "mutationBonus": 0.06,
+      "colorBias": ["violet", "blue", "white"],
+      "note": "Boosts glowing traits."
+    }
+  },
+  {
+    "id": "shell_powder",
+    "name": "Shell Powder",
+    "description": "Ground shell used to toughen offspring and reinforce habitats.",
+    "tags": ["additive", "resource"],
+    "weight": 1,
+    "value": 9,
+    "breedingEffects": {
+      "preferredTraits": ["shell"],
+      "preferredMutations": ["thick_shell"],
+      "mutationBonus": 0.04,
+      "note": "Boosts defensive traits."
+    }
+  },
+  {
+    "id": "mud_minnow_catch",
+    "name": "Mud Minnow",
+    "description": "A small river fish. Nutritious if you don't think too hard about it.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 4,
+    "effects": [
+      { "stat": "hunger", "value": 10 }
+    ]
+  },
+  {
+    "id": "reed_carp_catch",
+    "name": "Reed Carp",
+    "description": "A bigger, more respectable catch from the reeds.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 6,
+    "effects": [
+      { "stat": "hunger", "value": 14 }
+    ]
+  },
+  {
+    "id": "drift_crab_catch",
+    "name": "Drift Crab",
+    "description": "Snappy, ugly, and delicious if properly cooked.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 6,
+    "effects": [
+      { "stat": "hunger", "value": 12 }
+    ]
+  },
+  {
+    "id": "bog_perch_catch",
+    "name": "Bog Perch",
+    "description": "A murky wetland fish with a surprisingly clean taste.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 5,
+    "effects": [
+      { "stat": "hunger", "value": 11 }
+    ]
+  },
+  {
+    "id": "mire_eel_catch",
+    "name": "Mire Eel",
+    "description": "An oily eel from the swamp channels.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 8,
+    "effects": [
+      { "stat": "hunger", "value": 16 }
+    ]
+  },
+  {
+    "id": "mud_shrimp",
+    "name": "Mud Shrimp",
+    "description": "Tiny, weird, and still edible.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 4,
+    "effects": [
+      { "stat": "hunger", "value": 9 }
+    ]
+  },
+  {
+    "id": "silt_flounder",
+    "name": "Silt Flounder",
+    "description": "A flat mud-loving fish with decent meat.",
+    "tags": ["food", "fishing"],
+    "usable": true,
+    "weight": 1,
+    "value": 6,
+    "effects": [
+      { "stat": "hunger", "value": 13 }
+    ]
+  },
+  {
+    "id": "old_boot",
+    "name": "Old Boot",
+    "description": "Technically a catch. Morally a disappointment.",
+    "tags": ["junk", "fishing"],
+    "weight": 1,
+    "value": 1
+  },
+  {
+    "id": "broken_lure",
+    "name": "Broken Lure",
+    "description": "The remains of somebody else's optimism.",
+    "tags": ["junk"],
+    "weight": 1,
+    "value": 1
+  },
+  {
+    "id": "algae_bundle",
+    "name": "Algae Bundle",
+    "description": "Wet plant matter useful in compost, feed, or regrettable recipes.",
+    "tags": ["resource"],
+    "weight": 1,
+    "value": 2
+  },
+  {
+    "id": "frog_lure",
+    "name": "Frog Lure",
+    "description": "A lively lure suited to swamp predators.",
+    "tags": ["bait"],
+    "weight": 1,
+    "value": 3
+  },
+  {
+    "id": "dock_turtle_egg",
+    "name": "Dock Turtle Egg",
+    "description": "A fragile egg from a river turtle nesting near the dock.",
+    "tags": ["food", "quest"],
+    "usable": true,
+    "weight": 1,
+    "value": 10,
+    "effects": [
+      { "stat": "hunger", "value": 8 }
+    ]
+  }
+]

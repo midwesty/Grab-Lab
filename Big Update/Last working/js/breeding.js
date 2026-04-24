@@ -11,18 +11,8 @@ window.GrabLabBreeding = (() => {
     selectedParentA: null,
     selectedParentB: null,
     selectedAdditives: [],
-    selectedFacilityTarget: "base", // base | boat
     previewResult: null
   };
-
-  function htmlEscape(value = "") {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
 
   function getBreedingJobs() {
     return U.toArray(S.getBase()?.breedingJobs);
@@ -34,18 +24,6 @@ window.GrabLabBreeding = (() => {
 
   function getTraits() {
     return U.toArray(S.getData()?.traits);
-  }
-
-  function getBaseStructures() {
-    return U.toArray(S.getBase()?.structures);
-  }
-
-  function getBoatModules() {
-    return U.toArray(S.getBoat()?.modules);
-  }
-
-  function getBoatHabitats() {
-    return U.toArray(S.getBoat()?.habitats);
   }
 
   function getAdditiveItems() {
@@ -67,16 +45,6 @@ window.GrabLabBreeding = (() => {
     state.selectedParentB = specimenId || null;
     refreshPreview();
     return state.selectedParentB;
-  }
-
-  function setFacilityTarget(target = "base") {
-    state.selectedFacilityTarget = target === "boat" ? "boat" : "base";
-    refreshPreview();
-    return state.selectedFacilityTarget;
-  }
-
-  function getFacilityTarget() {
-    return state.selectedFacilityTarget || "base";
   }
 
   function toggleAdditive(itemId) {
@@ -113,56 +81,7 @@ window.GrabLabBreeding = (() => {
     return S.getFlag(CFG.BREEDING.crossSpeciesUnlockId, false);
   }
 
-  function targetHasBreedingTank(target = getFacilityTarget()) {
-    if (target === "boat") {
-      return getBoatModules().some((entry) => entry.structureId === "breeding_tank_t1");
-    }
-
-    return getBaseStructures().some((entry) => entry.structureId === "breeding_tank_t1");
-  }
-
-  function getFacilityStatus(target = getFacilityTarget()) {
-    const hasTank = targetHasBreedingTank(target);
-    return {
-      ok: hasTank,
-      reason: hasTank
-        ? ""
-        : target === "boat"
-          ? "Boat does not have a Breeding Tank yet."
-          : "Base does not have a Breeding Tank yet."
-    };
-  }
-
-  function getSpecimenHostLabel(specimenId) {
-    const baseHabitat = AN.getSpecimenHabitat(specimenId);
-    if (baseHabitat) {
-      return `Base • ${baseHabitat.name || "Habitat"}`;
-    }
-
-    const boatHabitat = getBoatHabitats().find((entry) => U.toArray(entry.occupants).includes(specimenId));
-    if (boatHabitat) {
-      return `Boat • ${boatHabitat.name || "Habitat"}`;
-    }
-
-    return "Unassigned";
-  }
-
-  function getEligibleBreedingSpecimens() {
-    return AN.getEligibleBreedingSpecimens()
-      .slice()
-      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
-  }
-
-  function canBreedPair(parentA, parentB, facilityTarget = getFacilityTarget()) {
-    if (!targetHasBreedingTank(facilityTarget)) {
-      return {
-        ok: false,
-        reason: facilityTarget === "boat"
-          ? "Build a Breeding Tank on the boat first."
-          : "Build a Breeding Tank at the base first."
-      };
-    }
-
+  function canBreedPair(parentA, parentB) {
     if (!parentA || !parentB) {
       return { ok: false, reason: "Two parents are required." };
     }
@@ -177,10 +96,6 @@ window.GrabLabBreeding = (() => {
 
     if (Number(parentA.needs?.comfort || 0) < 40 || Number(parentB.needs?.comfort || 0) < 40) {
       return { ok: false, reason: "Both parents need better comfort." };
-    }
-
-    if (Number(parentA.needs?.cleanliness || 0) < 35 || Number(parentB.needs?.cleanliness || 0) < 35) {
-      return { ok: false, reason: "Both parents need cleaner living conditions." };
     }
 
     if (parentA.speciesId !== parentB.speciesId && !hasCrossSpeciesUnlock()) {
@@ -403,7 +318,7 @@ window.GrabLabBreeding = (() => {
       return null;
     }
 
-    const check = canBreedPair(parentA, parentB, getFacilityTarget());
+    const check = canBreedPair(parentA, parentB);
     if (!check.ok) {
       state.previewResult = {
         blocked: true,
@@ -468,68 +383,11 @@ window.GrabLabBreeding = (() => {
     return child;
   }
 
-  function assignSpecimenToBoatHabitat(specimenId, habitatId) {
-    const habitats = getBoatHabitats();
-    const habitat = habitats.find((entry) => entry.id === habitatId);
-    const specimen = AN.getSpecimen(specimenId);
-
-    if (!habitat || !specimen) {
-      return { ok: false, reason: "Boat habitat or specimen not found." };
-    }
-
-    const compat = AN.getHabitatCompatibility(specimen, habitat);
-    if (!compat.ok) return compat;
-
-    AN.removeSpecimenFromHabitat(specimenId);
-
-    habitats.forEach((entry) => {
-      entry.occupants = U.toArray(entry.occupants).filter((id) => id !== specimenId);
-    });
-
-    habitat.occupants = U.toArray(habitat.occupants);
-    habitat.occupants.push(specimenId);
-
-    S.updateBoat({ habitats });
-    S.logActivity(`Assigned ${specimen.name} to boat habitat ${habitat.name}.`, "success");
-    return { ok: true };
-  }
-
-  function autoAssignChildToHabitat(child, facilityTarget = getFacilityTarget()) {
-    if (!child?.id) return null;
-
-    if (facilityTarget === "boat") {
-      const boatHabitat = getBoatHabitats().find((habitat) => {
-        const compat = AN.getHabitatCompatibility(child, habitat);
-        return compat.ok;
-      });
-
-      if (boatHabitat) {
-        assignSpecimenToBoatHabitat(child.id, boatHabitat.id);
-        return boatHabitat;
-      }
-
-      return null;
-    }
-
-    const baseHabitat = U.toArray(S.getBase()?.habitats).find((habitat) => {
-      const compat = AN.getHabitatCompatibility(child, habitat);
-      return compat.ok;
-    });
-
-    if (baseHabitat) {
-      AN.assignSpecimenToHabitat(child.id, baseHabitat.id);
-      return baseHabitat;
-    }
-
-    return null;
-  }
-
   function createBreedingJob(parentAId, parentBId, options = {}) {
     const parentA = AN.getSpecimen(parentAId);
     const parentB = AN.getSpecimen(parentBId);
-    const facilityTarget = options.facilityTarget || getFacilityTarget();
 
-    const check = canBreedPair(parentA, parentB, facilityTarget);
+    const check = canBreedPair(parentA, parentB);
     if (!check.ok) {
       throw new Error(check.reason);
     }
@@ -541,7 +399,6 @@ window.GrabLabBreeding = (() => {
       id: U.uid("breed"),
       parentAId,
       parentBId,
-      facilityTarget,
       preview,
       additives,
       startedAt: U.isoNow(),
@@ -562,7 +419,7 @@ window.GrabLabBreeding = (() => {
     S.updateBase({ specimens: AN.getBaseSpecimens() });
 
     P.registerBreedAction();
-    S.logActivity(`Started breeding job at the ${facilityTarget}: ${parentA.name} + ${parentB.name}.`, "success");
+    S.logActivity(`Started breeding job: ${parentA.name} + ${parentB.name}.`, "success");
     S.addToast("Breeding started.", "success");
 
     clearSelectedParents();
@@ -614,20 +471,11 @@ window.GrabLabBreeding = (() => {
     const remaining = getBreedingJobs().filter((entry) => entry.id !== jobId);
     S.updateBase({ breedingJobs: remaining });
 
-    const assignedHabitat = autoAssignChildToHabitat(child, job.facilityTarget || "base");
-
     AN.addDnaRecordForSpecies(child.speciesId, child);
     P.discoverSpecies(child.speciesId);
     P.awardPlayerXp(15 + Number(child.level || 1), "successful breeding");
 
-    S.logActivity(`Breeding complete: ${child.name} was born at the ${job.facilityTarget || "base"}.`, "success");
-
-    if (assignedHabitat) {
-      S.logActivity(`${child.name} was placed into ${assignedHabitat.name || "a compatible habitat"}.`, "info");
-    } else {
-      S.logActivity(`${child.name} has no compatible habitat yet and remains unassigned.`, "warning");
-    }
-
+    S.logActivity(`Breeding complete: ${child.name} was born.`, "success");
     S.addToast(`${child.name} was born!`, "success");
 
     renderBreedingPanel();
@@ -677,12 +525,19 @@ window.GrabLabBreeding = (() => {
       <div class="card">
         <div class="meta-title">${htmlEscape(specimen.name)}</div>
         <div class="meta-sub">${htmlEscape(AN.getAnimalName(specimen.speciesId))} • Lv ${htmlEscape(String(specimen.level || 1))}</div>
-        <div class="meta-sub">Location: ${htmlEscape(getSpecimenHostLabel(specimen.id))}</div>
         <div class="meta-sub">Traits: ${htmlEscape(U.toArray(specimen.traits).join(", ") || "None")}</div>
         <div class="meta-sub">Mutations: ${htmlEscape(U.toArray(specimen.mutations).join(", ") || "None")}</div>
-        <div class="meta-sub">Needs — Hunger ${htmlEscape(String(Math.round(specimen?.needs?.hunger ?? 0)))}, Comfort ${htmlEscape(String(Math.round(specimen?.needs?.comfort ?? 0)))}, Cleanliness ${htmlEscape(String(Math.round(specimen?.needs?.cleanliness ?? 0)))}</div>
       </div>
     `;
+  }
+
+  function htmlEscape(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 
   function renderBreedingPanel() {
@@ -692,11 +547,9 @@ window.GrabLabBreeding = (() => {
 
     if (!parentAEl || !parentBEl || !resultEl) return;
 
-    const eligible = getEligibleBreedingSpecimens();
+    const eligible = AN.getEligibleBreedingSpecimens();
     const { parentA, parentB } = getSelectedParents();
     const preview = refreshPreview();
-    const facilityTarget = getFacilityTarget();
-    const facilityStatus = getFacilityStatus(facilityTarget);
 
     parentAEl.innerHTML = `
       ${formatParentCard(parentA, "Parent A")}
@@ -724,19 +577,6 @@ window.GrabLabBreeding = (() => {
     const jobs = getBreedingJobs();
 
     resultEl.innerHTML = `
-      <div class="card">
-        <h3>Breeding Facility</h3>
-        <div class="admin-console-actions">
-          <button class="${facilityTarget === "base" ? "primary-btn" : "ghost-btn"} breeding-target-btn" data-target="base">Base</button>
-          <button class="${facilityTarget === "boat" ? "primary-btn" : "ghost-btn"} breeding-target-btn" data-target="boat">Boat</button>
-        </div>
-        ${
-          facilityStatus.ok
-            ? `<p class="accent-text">Breeding Tank available at the ${htmlEscape(facilityTarget)}.</p>`
-            : `<p class="danger-text">${htmlEscape(facilityStatus.reason)}</p>`
-        }
-      </div>
-
       <div class="card">
         <h3>Preview</h3>
         ${
@@ -773,7 +613,7 @@ window.GrabLabBreeding = (() => {
       </div>
 
       <div class="card">
-        <button id="btnStartBreedingJob" class="primary-btn" ${(!preview || preview.blocked) ? "disabled" : ""}>Start Breeding</button>
+        <button id="btnStartBreedingJob" class="primary-btn">Start Breeding</button>
         <button id="btnClearBreedingSelection" class="ghost-btn">Clear Selection</button>
       </div>
 
@@ -785,7 +625,6 @@ window.GrabLabBreeding = (() => {
             : jobs.map((job) => `
               <div class="card" style="margin-bottom:.6rem;">
                 <div class="meta-title">${htmlEscape(job.preview?.childName || "Unknown Offspring")}</div>
-                <div class="meta-sub">Facility: ${htmlEscape(U.titleCase(job.facilityTarget || "base"))}</div>
                 <div class="meta-sub">Progress: ${htmlEscape(String(job.progressMinutes || 0))}/${htmlEscape(String(job.durationMinutes || 0))} minutes</div>
                 <button class="ghost-btn breeding-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
               </div>
@@ -822,13 +661,6 @@ window.GrabLabBreeding = (() => {
       });
     });
 
-    U.qsa(".breeding-target-btn", resultEl).forEach((btn) => {
-      U.on(btn, "click", () => {
-        setFacilityTarget(btn.dataset.target);
-        renderBreedingPanel();
-      });
-    });
-
     const startBtn = U.byId("btnStartBreedingJob");
     const clearBtn = U.byId("btnClearBreedingSelection");
 
@@ -836,9 +668,7 @@ window.GrabLabBreeding = (() => {
       U.on(startBtn, "click", () => {
         const current = getSelectedParents();
         try {
-          createBreedingJob(current.parentA?.id, current.parentB?.id, {
-            facilityTarget: getFacilityTarget()
-          });
+          createBreedingJob(current.parentA?.id, current.parentB?.id);
           renderBreedingPanel();
           UI.renderEverything();
         } catch (err) {
@@ -939,12 +769,6 @@ window.GrabLabBreeding = (() => {
         renderBreedingPanel();
       }
     });
-
-    U.eventBus.on("boat:changed", () => {
-      if (S.isModalOpen("breedingModal")) {
-        renderBreedingPanel();
-      }
-    });
   }
 
   function init() {
@@ -967,10 +791,6 @@ window.GrabLabBreeding = (() => {
     getMutations,
     getTraits,
     getAdditiveItems,
-    getFacilityTarget,
-    setFacilityTarget,
-    targetHasBreedingTank,
-    getFacilityStatus,
 
     setParentA,
     setParentB,

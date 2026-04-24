@@ -64,16 +64,8 @@ window.GrabLabWorld = (() => {
     const halfCols = Math.floor(cols / 2);
     const halfRows = Math.floor(rows / 2);
 
-    const startX = U.clamp(
-      world.currentTileX - halfCols,
-      0,
-      Math.max(0, CFG.WORLD.worldWidthTiles - cols)
-    );
-    const startY = U.clamp(
-      world.currentTileY - halfRows,
-      0,
-      Math.max(0, CFG.WORLD.worldHeightTiles - rows)
-    );
+    const startX = U.clamp(world.currentTileX - halfCols, 0, Math.max(0, CFG.WORLD.worldWidthTiles - cols));
+    const startY = U.clamp(world.currentTileY - halfRows, 0, Math.max(0, CFG.WORLD.worldHeightTiles - rows));
 
     return { startX, startY };
   }
@@ -91,6 +83,7 @@ window.GrabLabWorld = (() => {
       size
     };
   }
+
 
   function buildTravelPath(fromX, fromY, toX, toY) {
     const path = [];
@@ -185,12 +178,7 @@ window.GrabLabWorld = (() => {
       };
     }
 
-    const t = U.clamp(
-      state.travel.progressMs / Math.max(1, state.travel.stepDurationMs),
-      0,
-      1
-    );
-
+    const t = U.clamp(state.travel.progressMs / Math.max(1, state.travel.stepDurationMs), 0, 1);
     return {
       x: U.lerp(state.travel.from.x, state.travel.to.x, t),
       y: U.lerp(state.travel.from.y, state.travel.to.y, t)
@@ -294,7 +282,6 @@ window.GrabLabWorld = (() => {
     if (tileType === "water") {
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 2;
-
       ctx.beginPath();
       ctx.arc(x + size * 0.3, y + size * 0.42, size * 0.16, 0, Math.PI * 1.3);
       ctx.stroke();
@@ -389,184 +376,6 @@ window.GrabLabWorld = (() => {
     ctx.fillRect(x + size * 0.74, y + size * 0.2, size * 0.08, size * 0.22);
   }
 
-  function getPoiRenderStyle(poi) {
-    switch (poi?.type) {
-      case "npc":
-        return {
-          fill: "#ffd166",
-          stroke: "rgba(28, 20, 8, 0.85)",
-          labelBg: "rgba(50, 38, 10, 0.86)",
-          radius: 10,
-          kind: "npc"
-        };
-      case "capturable_animal":
-      case "wild_animal":
-        return {
-          fill: "#95e07e",
-          stroke: "rgba(10, 25, 10, 0.85)",
-          labelBg: "rgba(12, 30, 12, 0.86)",
-          radius: 10,
-          kind: "animal"
-        };
-      case "fish_spot":
-        return {
-          fill: "#7ec8ff",
-          stroke: "rgba(8, 18, 26, 0.85)",
-          labelBg: "rgba(10, 24, 35, 0.86)",
-          radius: 9,
-          kind: "fish"
-        };
-      case "fungal_patch":
-        return {
-          fill: "#d996ff",
-          stroke: "rgba(27, 12, 34, 0.88)",
-          labelBg: "rgba(33, 14, 42, 0.88)",
-          radius: 10,
-          kind: "fungus"
-        };
-      case "resource":
-      case "tracks":
-      case "loot":
-        return {
-          fill: "#c8e37b",
-          stroke: "rgba(18, 26, 8, 0.85)",
-          labelBg: "rgba(22, 28, 10, 0.86)",
-          radius: 8,
-          kind: "resource"
-        };
-      case "dock":
-        return {
-          fill: "#f0c4a1",
-          stroke: "rgba(42, 25, 12, 0.88)",
-          labelBg: "rgba(46, 28, 14, 0.88)",
-          radius: 9,
-          kind: "dock"
-        };
-      default:
-        return {
-          fill: "#95e07e",
-          stroke: "rgba(8, 12, 10, 0.75)",
-          labelBg: "rgba(5, 8, 6, 0.8)",
-          radius: 9,
-          kind: "default"
-        };
-    }
-  }
-
-  function drawNpcGlyph(ctx, px, py) {
-    ctx.fillStyle = "#fff7d4";
-    ctx.beginPath();
-    ctx.arc(px, py - 4, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#fff7d4";
-    ctx.beginPath();
-    ctx.moveTo(px, py + 1);
-    ctx.lineTo(px, py + 9);
-    ctx.moveTo(px - 5, py + 4);
-    ctx.lineTo(px + 5, py + 4);
-    ctx.moveTo(px - 4, py + 13);
-    ctx.lineTo(px, py + 9);
-    ctx.lineTo(px + 4, py + 13);
-    ctx.stroke();
-  }
-
-  function drawAnimalGlyph(ctx, px, py) {
-    ctx.fillStyle = "#eff8ea";
-    ctx.beginPath();
-    ctx.ellipse(px, py + 2, 7, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(px + 5, py - 3, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = "#eff8ea";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(px - 3, py + 7);
-    ctx.lineTo(px - 5, py + 12);
-    ctx.moveTo(px + 2, py + 7);
-    ctx.lineTo(px + 1, py + 12);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(px - 7, py + 1);
-    ctx.quadraticCurveTo(px - 12, py - 2, px - 14, py + 2);
-    ctx.stroke();
-  }
-
-  function drawFishGlyph(ctx, px, py) {
-    ctx.fillStyle = "#eef8ff";
-    ctx.beginPath();
-    ctx.ellipse(px, py, 7, 4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.moveTo(px - 8, py);
-    ctx.lineTo(px - 14, py - 4);
-    ctx.lineTo(px - 14, py + 4);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  function drawFungusGlyph(ctx, px, py) {
-    ctx.fillStyle = "#f7e7ff";
-    ctx.beginPath();
-    ctx.arc(px, py - 2, 6, Math.PI, 0);
-    ctx.fill();
-    ctx.fillRect(px - 2, py - 2, 4, 10);
-  }
-
-  function drawResourceGlyph(ctx, px, py) {
-    ctx.fillStyle = "#f5ffe4";
-    ctx.fillRect(px - 1, py - 10, 2, 14);
-
-    ctx.beginPath();
-    ctx.ellipse(px - 4, py - 3, 4, 7, -0.45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(px + 4, py - 1, 4, 7, 0.45, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function drawDockGlyph(ctx, px, py) {
-    ctx.fillStyle = "#fff0e5";
-    ctx.fillRect(px - 8, py - 2, 16, 5);
-    ctx.fillRect(px - 5, py + 3, 2, 8);
-    ctx.fillRect(px + 3, py + 3, 2, 8);
-  }
-
-  function drawPoiGlyph(ctx, poi, px, py, style) {
-    switch (style.kind) {
-      case "npc":
-        drawNpcGlyph(ctx, px, py);
-        break;
-      case "animal":
-        drawAnimalGlyph(ctx, px, py);
-        break;
-      case "fish":
-        drawFishGlyph(ctx, px, py);
-        break;
-      case "fungus":
-        drawFungusGlyph(ctx, px, py);
-        break;
-      case "resource":
-        drawResourceGlyph(ctx, px, py);
-        break;
-      case "dock":
-        drawDockGlyph(ctx, px, py);
-        break;
-      default:
-        ctx.fillStyle = "#edf6ef";
-        ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-    }
-  }
-
   function drawPointOfInterest(ctx, poi) {
     if (!poi) return;
 
@@ -581,40 +390,41 @@ window.GrabLabWorld = (() => {
     const px = rect.x + localX;
     const py = rect.y + localY;
 
-    const selected = S.getRuntime()?.selectedEntityId === poi.id;
+    const selected = state.selectedPoiId === poi.id || S.getRuntime()?.selectedEntityId === poi.id;
     const pulse = 1 + Math.sin(state.hoverPulse) * 0.06;
-    const style = getPoiRenderStyle(poi);
 
     ctx.save();
 
-    ctx.fillStyle = style.fill;
+    ctx.fillStyle = poi.type === "fish_spot"
+      ? "#7ec8ff"
+      : poi.type === "fungal_patch"
+        ? "#d996ff"
+        : poi.type === "loot"
+          ? "#ffd166"
+          : "#95e07e";
+
     ctx.beginPath();
-    ctx.arc(px, py, selected ? style.radius * 1.18 * pulse : style.radius, 0, Math.PI * 2);
+    ctx.arc(px, py, selected ? 11 * pulse : 9, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = style.stroke;
+    ctx.strokeStyle = "rgba(8, 12, 10, 0.75)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawPoiGlyph(ctx, poi, px, py, style);
-
     if (selected) {
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(px, py, (style.radius + 6) * pulse, 0, Math.PI * 2);
+      ctx.arc(px, py, 15 * pulse, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    const label = poi.shortName || poi.name || "POI";
-    const labelWidth = Math.max(42, Math.min(72, label.length * 7 + 10));
-    ctx.fillStyle = style.labelBg;
-    ctx.fillRect(px - labelWidth / 2, py - 30, labelWidth, 16);
-
+    ctx.fillStyle = "rgba(5, 8, 6, 0.8)";
+    ctx.fillRect(px - 28, py - 28, 56, 16);
     ctx.fillStyle = "#edf6ef";
     ctx.font = "12px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(label, px, py - 18);
+    ctx.fillText(poi.shortName || poi.name || "POI", px, py - 16);
 
     ctx.restore();
   }
@@ -663,30 +473,16 @@ window.GrabLabWorld = (() => {
   }
 
   function drawHudHints(ctx) {
-    const selectedId = S.getRuntime()?.selectedEntityId;
-    const tile = S.getCurrentMapTile();
-    const poi = U.toArray(tile?.pointsOfInterest).find((entry) => entry?.id === selectedId);
-    if (!poi) return;
-
-    const typeLabel = U.titleCase(String(poi.type || "poi").replaceAll("_", " "));
-    let actionHint = "Tap to inspect.";
-
-    if (poi.type === "npc" && poi.recruitable) {
-      actionHint = "Tap again to recruit.";
-    } else if ((poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
-      actionHint = "Tap again to capture.";
-    }
+    const target = S.getRuntime()?.selectedEntityId;
+    if (!target) return;
 
     ctx.save();
-    ctx.fillStyle = "rgba(10, 15, 11, 0.78)";
-    ctx.fillRect(18, 18, 320, 46);
+    ctx.fillStyle = "rgba(10, 15, 11, 0.76)";
+    ctx.fillRect(18, 18, 260, 36);
     ctx.fillStyle = "#edf6ef";
     ctx.font = "14px Trebuchet MS, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`${poi.name || U.titleCase(selectedId)}`, 30, 37);
-    ctx.fillStyle = "#b7cbbd";
-    ctx.font = "12px Trebuchet MS, sans-serif";
-    ctx.fillText(`${typeLabel} • ${actionHint}`, 30, 54);
+    ctx.fillText(`Selected: ${U.titleCase(target)}`, 30, 41);
     ctx.restore();
   }
 

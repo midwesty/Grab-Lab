@@ -59,35 +59,6 @@
           "tileY": 14,
           "localX": 49,
           "localY": 24
-        },
-        {
-          "id": "marsy_intro_npc",
-          "name": "Marsy",
-          "shortName": "Marsy",
-          "description": "A strange little dockside marsupial watches you with bright, intelligent eyes. They seem eager to help and surprisingly familiar with field station life.",
-          "type": "npc",
-          "speciesId": "marsy_marsupial",
-          "role": "starter_companion",
-          "recruitable": true,
-          "tileX": 12,
-          "tileY": 14,
-          "localX": 22,
-          "localY": 40,
-          "dialogueId": "marsy_intro"
-        },
-        {
-          "id": "dock_turtle_nearby",
-          "name": "Dock Turtle",
-          "shortName": "Turtle",
-          "description": "A calm turtle basks near the dock pilings. It looks capturable if approached carefully.",
-          "type": "capturable_animal",
-          "speciesId": "dock_turtle",
-          "recruitable": false,
-          "capturable": true,
-          "tileX": 12,
-          "tileY": 14,
-          "localX": 58,
-          "localY": 52
         }
       ]
     },
@@ -109,20 +80,6 @@
           "tileY": 14,
           "localX": 36,
           "localY": 29
-        },
-        {
-          "id": "mud_minnow_school",
-          "name": "Mud Minnow School",
-          "shortName": "Minnows",
-          "description": "A school of mud minnows churns the shallows. With the right gear, you could catch and keep some alive in an aquarium.",
-          "type": "capturable_animal",
-          "speciesId": "mud_minnow",
-          "capturable": true,
-          "recruitable": false,
-          "tileX": 13,
-          "tileY": 14,
-          "localX": 50,
-          "localY": 18
         }
       ]
     },
@@ -144,20 +101,6 @@
           "tileY": 15,
           "localX": 25,
           "localY": 22
-        },
-        {
-          "id": "reed_hopper_1",
-          "name": "Reed Hopper",
-          "shortName": "Hopper",
-          "description": "A jumpy little wetland creature darts between the reeds. It looks tamable or capturable with the right approach.",
-          "type": "capturable_animal",
-          "speciesId": "reed_hopper",
-          "capturable": true,
-          "recruitable": false,
-          "tileX": 12,
-          "tileY": 15,
-          "localX": 47,
-          "localY": 36
         }
       ]
     },
@@ -179,20 +122,6 @@
           "tileY": 16,
           "localX": 20,
           "localY": 36
-        },
-        {
-          "id": "mire_fox_sighting",
-          "name": "Mire Fox",
-          "shortName": "Fox",
-          "description": "A wary mire fox watches from cover. It looks fast, clever, and potentially recruitable if properly tamed later.",
-          "type": "wild_animal",
-          "speciesId": "mire_fox",
-          "capturable": true,
-          "recruitable": false,
-          "tileX": 16,
-          "tileY": 16,
-          "localX": 48,
-          "localY": 28
         }
       ]
     },
@@ -214,20 +143,6 @@
           "tileY": 19,
           "localX": 40,
           "localY": 40
-        },
-        {
-          "id": "bog_crab_1",
-          "name": "Bog Crab",
-          "shortName": "Crab",
-          "description": "A snappy little bog crab scuttles across the mud. It looks catchable if you can pin it down.",
-          "type": "capturable_animal",
-          "speciesId": "bog_crab",
-          "capturable": true,
-          "recruitable": false,
-          "tileX": 9,
-          "tileY": 19,
-          "localX": 25,
-          "localY": 25
         }
       ]
     },
@@ -249,20 +164,6 @@
           "tileY": 18,
           "localX": 32,
           "localY": 28
-        },
-        {
-          "id": "spore_moth_1",
-          "name": "Spore Moth",
-          "shortName": "Moth",
-          "description": "A delicate luminous moth circles the grove. Capturing one alive would require proper preparation.",
-          "type": "wild_animal",
-          "speciesId": "spore_moth",
-          "capturable": true,
-          "recruitable": false,
-          "tileX": 21,
-          "tileY": 18,
-          "localX": 52,
-          "localY": 18
         }
       ]
     }
