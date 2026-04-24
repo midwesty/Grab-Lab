@@ -30,6 +30,26 @@ window.GrabLabUI = (() => {
     return window.GL_BUILD || window.GrabLabBuild || null;
   }
 
+  function getInventoryApi() {
+    return window.GL_INVENTORY || window.GrabLabInventory || null;
+  }
+
+  function getCraftingApi() {
+    return window.GL_CRAFTING || window.GrabLabCrafting || null;
+  }
+
+  function getBreedingApi() {
+    return window.GL_BREEDING || window.GrabLabBreeding || null;
+  }
+
+  function getFishingApi() {
+    return window.GL_FISHING || window.GrabLabFishing || null;
+  }
+
+  function getCombatApi() {
+    return window.GL_COMBAT || window.GrabLabCombat || null;
+  }
+
   function htmlEscape(value = "") {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -67,16 +87,14 @@ window.GrabLabUI = (() => {
     });
 
     const map = {
-      boot: boot,
-      creator: creator,
-      game: game,
-      combat: combat
+      boot,
+      creator,
+      game,
+      combat
     };
 
     const target = map[screenId] || game;
-    if (target) {
-      target.classList.add("active");
-    }
+    if (target) target.classList.add("active");
 
     S.setCurrentScreen(screenId);
   }
@@ -109,11 +127,11 @@ window.GrabLabUI = (() => {
     if (barThirst) barThirst.style.width = `${thirstPct}%`;
     if (barInfection) barInfection.style.width = `${infectionPct}%`;
 
-    U.setText(el("hudHealthText"), `${stats.health}/${stats.maxHealth}`);
-    U.setText(el("hudStaminaText"), `${stats.stamina}/${stats.maxStamina}`);
+    U.setText(el("hudHealthText"), `${Math.round(stats.health || 0)}/${Math.round(stats.maxHealth || 0)}`);
+    U.setText(el("hudStaminaText"), `${Math.round(stats.stamina || 0)}/${Math.round(stats.maxStamina || 0)}`);
     U.setText(el("hudHungerText"), hungerPct >= 70 ? "Fed" : hungerPct >= 40 ? "Hungry" : "Starving");
     U.setText(el("hudThirstText"), thirstPct >= 70 ? "Hydrated" : thirstPct >= 40 ? "Thirsty" : "Parched");
-    U.setText(el("hudInfectionText"), `${infectionPct}%`);
+    U.setText(el("hudInfectionText"), `${Math.round(infectionPct)}%`);
   }
 
   function renderStatusEffects() {
@@ -161,21 +179,13 @@ window.GrabLabUI = (() => {
 
     active.slice(0, 6).forEach((questId) => {
       const questDef = S.getDataEntry("dialogue", questId) || null;
-      const card = U.createEl("div", {
-        className: "card"
-      });
+      const card = U.createEl("div", { className: "card" });
 
-      const title = U.createEl("div", {
-        className: "meta-title",
-        text: questDef?.title || U.titleCase(questId)
-      });
+      card.innerHTML = `
+        <div class="meta-title">${htmlEscape(questDef?.title || U.titleCase(questId))}</div>
+        <div class="meta-sub">${htmlEscape(questDef?.summary || "Keep moving forward.")}</div>
+      `;
 
-      const sub = U.createEl("div", {
-        className: "meta-sub",
-        text: questDef?.summary || "Keep moving forward."
-      });
-
-      card.append(title, sub);
       host.appendChild(card);
     });
   }
@@ -223,6 +233,10 @@ window.GrabLabUI = (() => {
     });
   }
 
+  function isPoiResolved(poi) {
+    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden);
+  }
+
   function renderNearbyList() {
     const host = el("nearbyList");
     if (!host) return;
@@ -230,7 +244,7 @@ window.GrabLabUI = (() => {
     U.emptyEl(host);
 
     const tile = S.getCurrentMapTile();
-    const nearby = U.toArray(tile?.pointsOfInterest);
+    const nearby = U.toArray(tile?.pointsOfInterest).filter((poi) => !isPoiResolved(poi));
 
     if (!nearby.length) {
       host.appendChild(U.createEl("div", {
@@ -240,12 +254,35 @@ window.GrabLabUI = (() => {
       return;
     }
 
-    nearby.slice(0, 8).forEach((poi) => {
+    nearby.slice(0, 10).forEach((poi) => {
+      let action = "Inspect";
+      let tone = "info";
+
+      if (poi.type === "npc" && poi.recruitable) {
+        action = "Recruitable";
+        tone = "success";
+      } else if ((poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable !== false) {
+        action = "Capturable • Grab";
+        tone = "success";
+      } else if (poi.hostile || poi.encounterId || poi.type === "hostile" || poi.type === "enemy" || poi.type === "combat" || poi.type === "fungal_enemy") {
+        action = "Hostile • Fight";
+        tone = "warning";
+      } else if (poi.type === "fish_spot") {
+        action = "Fishing spot";
+      } else if (poi.type === "dock") {
+        action = "Boat / dock";
+      }
+
       host.appendChild(U.createEl("div", {
         className: "card",
-        html: `<div class="meta-title">${htmlEscape(poi.name || "Point of Interest")}</div>
-               <div class="meta-sub">${htmlEscape(poi.type || "Unknown")}</div>`
+        html: `
+          <div class="meta-title">${htmlEscape(poi.name || "Point of Interest")}</div>
+          <div class="meta-sub">${htmlEscape(U.titleCase(poi.type || "Unknown"))}</div>
+          <div class="meta-sub">${htmlEscape(action)}</div>
+        `
       }));
+
+      void tone;
     });
   }
 
@@ -320,13 +357,12 @@ window.GrabLabUI = (() => {
 
     const all = SAVE.listAllSaves();
 
-    const autoCard = U.createEl("div", {
-      className: "card"
-    });
+    const autoCard = U.createEl("div", { className: "card" });
     autoCard.innerHTML = `
       <div class="meta-title">Autosave</div>
       <div class="meta-sub">${htmlEscape(SAVE.getHumanSummaryText(all.autosave))}</div>
     `;
+
     U.on(autoCard, "click", () => {
       detail.innerHTML = `
         <h3>Autosave</h3>
@@ -360,6 +396,7 @@ window.GrabLabUI = (() => {
         });
       }
     });
+
     list.appendChild(autoCard);
 
     all.manual.forEach((slot) => {
@@ -434,6 +471,12 @@ window.GrabLabUI = (() => {
   }
 
   function renderInventoryModal() {
+    const api = getInventoryApi();
+    if (api?.renderInventoryPanel) {
+      api.renderInventoryPanel();
+      return;
+    }
+
     const grid = el("inventoryGrid");
     const detail = el("inventoryDetailContent");
     if (!grid || !detail) return;
@@ -451,11 +494,9 @@ window.GrabLabUI = (() => {
     }
 
     entries.forEach((entry) => {
-      const slot = U.createEl("div", {
-        className: "inventory-slot"
-      });
-
+      const slot = U.createEl("div", { className: "inventory-slot" });
       const name = entry?.def?.name || U.titleCase(entry?.itemId || "item");
+
       slot.innerHTML = `
         <div class="icon-thumb"></div>
         <div class="qty">${htmlEscape(String(entry.quantity || 1))}</div>
@@ -486,6 +527,7 @@ window.GrabLabUI = (() => {
     const player = S.getPlayer();
     const companions = U.toArray(S.getParty()?.active);
     const reserve = U.toArray(S.getParty()?.reserve);
+    const specimens = U.toArray(S.getBase()?.specimens);
 
     const entries = [
       {
@@ -498,18 +540,41 @@ window.GrabLabUI = (() => {
       ...companions.map((c) => ({
         id: c.id,
         name: c.name || "Companion",
-        subtitle: `${U.titleCase(c.speciesId || "creature")} • Level ${c.level || 1}`,
+        subtitle: `${U.titleCase(c.speciesId || "creature")} • Active • Level ${c.level || 1}`,
         data: c,
         isPlayer: false
       })),
       ...reserve.map((c) => ({
         id: c.id,
         name: `${c.name || "Reserve"} (Reserve)`,
-        subtitle: `${U.titleCase(c.speciesId || "creature")} • Level ${c.level || 1}`,
+        subtitle: `${U.titleCase(c.speciesId || "creature")} • Reserve • Level ${c.level || 1}`,
         data: c,
         isPlayer: false
-      }))
+      })),
+      ...specimens
+        .filter((spec) => {
+          const inActive = companions.some((c) => c.sourceSpecimenId === spec.id);
+          const inReserve = reserve.some((c) => c.sourceSpecimenId === spec.id);
+          return !inActive && !inReserve;
+        })
+        .map((spec) => ({
+          id: spec.id,
+          name: `${spec.name || spec.speciesId} (Specimen)`,
+          subtitle: `${U.titleCase(spec.speciesId || "creature")} • ${U.titleCase(spec.storage || "stored")} • Level ${spec.level || 1}`,
+          data: spec,
+          isPlayer: false,
+          isSpecimen: true
+        }))
     ];
+
+    if (!entries.length) {
+      list.appendChild(U.createEl("div", {
+        className: "card",
+        text: "No party members."
+      }));
+      detail.textContent = "No party members.";
+      return;
+    }
 
     entries.forEach((entry) => {
       const card = U.createEl("div", { className: "card" });
@@ -520,21 +585,24 @@ window.GrabLabUI = (() => {
 
       U.on(card, "click", () => {
         const d = entry.data || {};
+        const needs = d.needs || {};
+        const location = window.GL_ANIMALS?.getSpecimenLocationLabel?.(d.id, d.storage) || d.storage || "Party";
+
         detail.innerHTML = `
           <h3>${htmlEscape(entry.name)}</h3>
           <p>${htmlEscape(entry.subtitle)}</p>
+          <p><strong>Location:</strong> ${htmlEscape(entry.isPlayer ? "Player" : location)}</p>
           <p><strong>Health:</strong> ${htmlEscape(String(d?.stats?.health ?? d?.stats?.maxHealth ?? 0))}/${htmlEscape(String(d?.stats?.maxHealth ?? 0))}</p>
           <p><strong>Stamina:</strong> ${htmlEscape(String(d?.stats?.stamina ?? d?.stats?.maxStamina ?? 0))}/${htmlEscape(String(d?.stats?.maxStamina ?? 0))}</p>
+          ${entry.isSpecimen ? `<p><strong>Hunger:</strong> ${htmlEscape(String(Math.round(needs.hunger ?? 0)))}</p>` : ""}
+          ${entry.isSpecimen ? `<p><strong>Comfort:</strong> ${htmlEscape(String(Math.round(needs.comfort ?? 0)))}</p>` : ""}
+          ${entry.isSpecimen ? `<p><strong>Cleanliness:</strong> ${htmlEscape(String(Math.round(needs.cleanliness ?? 0)))}</p>` : ""}
           <p><strong>Traits:</strong> ${htmlEscape(U.toArray(d?.traits).join(", ") || "None")}</p>
         `;
       });
 
       list.appendChild(card);
     });
-
-    if (!entries.length) {
-      detail.textContent = "No party members.";
-    }
   }
 
   function renderBoatModal() {
@@ -596,12 +664,21 @@ window.GrabLabUI = (() => {
       <p><strong>Structures:</strong> ${htmlEscape(String(U.toArray(base?.structures).length))}</p>
       <p><strong>Storage Stacks:</strong> ${htmlEscape(String(U.toArray(base?.storage).length))}</p>
       <p><strong>Habitats:</strong> ${htmlEscape(String(U.toArray(base?.habitats).length))}</p>
+      <p><strong>Specimens:</strong> ${htmlEscape(String(U.toArray(base?.specimens).length))}</p>
+      <p><strong>Cryo Fridge:</strong> ${htmlEscape(String(U.toArray(base?.cryoFridge).length))} stored</p>
+      <p><strong>Traps:</strong> ${htmlEscape(String(U.toArray(base?.traps).length))}</p>
       <p><strong>Breeding Jobs:</strong> ${htmlEscape(String(U.toArray(base?.breedingJobs).length))}</p>
       <p><strong>Crafting Queues:</strong> ${htmlEscape(String(U.toArray(base?.craftingQueues).length))}</p>
     `;
   }
 
   function renderCraftModal() {
+    const api = getCraftingApi();
+    if (api?.renderCraftingPanel) {
+      api.renderCraftingPanel();
+      return;
+    }
+
     const list = el("recipeList");
     const detail = el("recipeDetail");
     if (!list || !detail) return;
@@ -621,6 +698,7 @@ window.GrabLabUI = (() => {
         <div class="meta-title">${htmlEscape(recipe.name || U.titleCase(recipe.id || "recipe"))}</div>
         <div class="meta-sub">${htmlEscape(recipe.station || "Workbench")}</div>
       `;
+
       U.on(card, "click", () => {
         detail.innerHTML = `
           <h3>${htmlEscape(recipe.name || U.titleCase(recipe.id || "recipe"))}</h3>
@@ -630,6 +708,7 @@ window.GrabLabUI = (() => {
           <p><strong>Outputs:</strong> ${htmlEscape(U.safeStringify(recipe.outputs || [], "[]"))}</p>
         `;
       });
+
       list.appendChild(card);
     });
   }
@@ -641,33 +720,56 @@ window.GrabLabUI = (() => {
 
     U.emptyEl(list);
 
-    const discovered = U.toArray(S.getPlayer()?.discoveredSpecies);
-    if (!discovered.length) {
-      list.appendChild(U.createEl("div", { className: "card", text: "No DNA entries recorded yet." }));
+    const player = S.getPlayer();
+    const dnaRegistry = U.toArray(player?.dnaRegistry);
+    const discovered = U.toArray(player?.discoveredSpecies);
+
+    const entries = dnaRegistry.length
+      ? dnaRegistry.map((record) => record.speciesId)
+      : discovered;
+
+    if (!entries.length) {
+      list.appendChild(U.createEl("div", {
+        className: "card",
+        text: "No DNA entries recorded yet."
+      }));
       detail.textContent = "Capture and log animals to populate the DNA database.";
       return;
     }
 
-    discovered.forEach((speciesId) => {
+    entries.forEach((speciesId) => {
       const def = S.getAnimalDef(speciesId);
+      const record = dnaRegistry.find((entry) => entry.speciesId === speciesId);
       const card = U.createEl("div", { className: "card" });
+
       card.innerHTML = `
-        <div class="meta-title">${htmlEscape(def?.name || U.titleCase(speciesId))}</div>
-        <div class="meta-sub">${htmlEscape(def?.family || "Unknown family")}</div>
+        <div class="meta-title">${htmlEscape(def?.name || record?.name || U.titleCase(speciesId))}</div>
+        <div class="meta-sub">${htmlEscape(def?.family || record?.family || "Unknown family")}</div>
+        <div class="meta-sub">Samples: ${htmlEscape(String(record?.sampleCount || 0))}</div>
       `;
+
       U.on(card, "click", () => {
         detail.innerHTML = `
-          <h3>${htmlEscape(def?.name || U.titleCase(speciesId))}</h3>
+          <h3>${htmlEscape(def?.name || record?.name || U.titleCase(speciesId))}</h3>
           <p>${htmlEscape(def?.description || "No DNA notes recorded.")}</p>
-          <p><strong>Traits:</strong> ${htmlEscape(U.toArray(def?.traits).join(", ") || "None")}</p>
-          <p><strong>Habitat:</strong> ${htmlEscape(def?.habitat || "Unknown")}</p>
+          <p><strong>Traits:</strong> ${htmlEscape(U.toArray(def?.traits || record?.traits).join(", ") || "None")}</p>
+          <p><strong>Habitat:</strong> ${htmlEscape(def?.habitat || record?.habitat || "Unknown")}</p>
+          <p><strong>Family:</strong> ${htmlEscape(def?.family || record?.family || "Unknown")}</p>
+          <p><strong>Samples:</strong> ${htmlEscape(String(record?.sampleCount || 0))}</p>
         `;
       });
+
       list.appendChild(card);
     });
   }
 
   function renderFishingModal() {
+    const api = getFishingApi();
+    if (api?.renderFishingPanel) {
+      api.renderFishingPanel();
+      return;
+    }
+
     const panel = el("fishingPanel");
     const catchPanel = el("fishingCatchPanel");
     if (!panel || !catchPanel) return;
@@ -746,12 +848,7 @@ window.GrabLabUI = (() => {
       return;
     }
 
-    const text = history
-      .slice(0, 50)
-      .map((row) => row.text)
-      .join("\n");
-
-    U.setText(host, text);
+    U.setText(host, history.slice(0, 50).map((row) => row.text).join("\n"));
   }
 
   function renderMapModal() {
@@ -766,7 +863,22 @@ window.GrabLabUI = (() => {
       <p><strong>Biome:</strong> ${htmlEscape(getBiomeLabel(world.currentBiomeId))}</p>
       <p><strong>Revealed Tiles:</strong> ${htmlEscape(String(U.toArray(world.revealedTiles).length))}</p>
       <p><strong>Cleared Tiles:</strong> ${htmlEscape(String(U.toArray(world.clearedTiles).length))}</p>
-      <p><strong>POI Count:</strong> ${htmlEscape(String(U.toArray(tile?.pointsOfInterest).length))}</p>
+      <p><strong>POI Count:</strong> ${htmlEscape(String(U.toArray(tile?.pointsOfInterest).filter((poi) => !isPoiResolved(poi)).length))}</p>
+    `;
+  }
+
+  function renderCombatActorCard(actor) {
+    const hpPct = percentFromPair(actor?.stats?.health, actor?.stats?.maxHealth);
+    const down = actor?.isDown || Number(actor?.stats?.health || 0) <= 0;
+    const capturable = actor?.captureEligible ? " • Capturable" : "";
+    const captureReady = actor?.captureReady ? " • Ready" : "";
+
+    return `
+      <div class="battle-portrait ${down ? "down" : ""}"></div>
+      <div class="meta-title">${htmlEscape(actor?.name || "Actor")}</div>
+      <div class="meta-sub">${htmlEscape(U.titleCase(actor?.kind || actor?.side || "actor"))}${htmlEscape(capturable)}${htmlEscape(captureReady)}</div>
+      <div class="bar" style="margin-top:.35rem;"><div class="fill" style="width:${hpPct}%;"></div></div>
+      <div class="meta-sub">HP ${htmlEscape(String(Math.round(actor?.stats?.health || 0)))}/${htmlEscape(String(Math.round(actor?.stats?.maxHealth || 0)))}</div>
     `;
   }
 
@@ -779,28 +891,53 @@ window.GrabLabUI = (() => {
     const actorCardStats = el("combatActorStats");
     const enemyField = el("enemyBattlefield");
     const allyField = el("allyBattlefield");
+    const logEl = el("combatLog");
 
-    if (title) U.setText(title, combat.encounterId ? U.titleCase(combat.encounterId) : "Fungal Encounter");
-    if (subtitle) U.setText(subtitle, combat.active ? "Combat in progress." : "The spores twitch in a deeply rude manner.");
-    if (actorCardName) U.setText(actorCardName, S.getPlayer()?.name || "Ranger");
+    const currentActor = U.toArray(combat.actors)[Number(combat.turnIndex || 0)] || null;
+    const encounterType = combat.encounterType || "fungal";
+
+    if (title) {
+      U.setText(title, combat.encounterId ? U.titleCase(combat.encounterId) : "Encounter");
+    }
+
+    if (subtitle) {
+      const typeText = encounterType === "wildlife"
+        ? "Wildlife encounter. Knock out or tame creatures to capture them."
+        : "Hostile combat. Keep your party alive.";
+      U.setText(subtitle, combat.active ? typeText : "No active encounter.");
+    }
+
+    if (actorCardName) {
+      U.setText(actorCardName, currentActor?.name || S.getPlayer()?.name || "Ranger");
+    }
+
     if (actorCardStats) {
-      const st = S.getPlayer()?.stats || {};
-      U.setText(actorCardStats, `HP ${st.health || 0}/${st.maxHealth || 0} • STA ${st.stamina || 0}/${st.maxStamina || 0}`);
+      if (currentActor) {
+        U.setText(
+          actorCardStats,
+          `Turn: ${currentActor.name} • HP ${Math.round(currentActor.stats.health || 0)}/${Math.round(currentActor.stats.maxHealth || 0)} • STA ${Math.round(currentActor.stats.stamina || 0)}/${Math.round(currentActor.stats.maxStamina || 0)}`
+        );
+      } else {
+        const st = S.getPlayer()?.stats || {};
+        U.setText(actorCardStats, `HP ${st.health || 0}/${st.maxHealth || 0} • STA ${st.stamina || 0}/${st.maxStamina || 0}`);
+      }
     }
 
     if (turnOrder) {
       U.emptyEl(turnOrder);
-      U.toArray(combat.actors).slice(0, 12).forEach((actor) => {
-        turnOrder.appendChild(U.createEl("div", {
-          className: "turn-chip",
-          text: actor?.name || "Actor"
-        }));
+      U.toArray(combat.actors).slice(0, 12).forEach((actor, index) => {
+        const chip = U.createEl("div", {
+          className: `turn-chip ${index === Number(combat.turnIndex || 0) ? "active" : ""}`,
+          text: `${actor?.name || "Actor"}${actor?.isDown ? " ✕" : ""}`
+        });
+        turnOrder.appendChild(chip);
       });
     }
 
     if (enemyField) {
       U.emptyEl(enemyField);
       const enemies = U.toArray(combat.enemies);
+
       if (!enemies.length) {
         enemyField.appendChild(U.createEl("div", {
           className: "battle-slot",
@@ -809,8 +946,8 @@ window.GrabLabUI = (() => {
       } else {
         enemies.forEach((enemy) => {
           enemyField.appendChild(U.createEl("div", {
-            className: "battle-slot",
-            html: `<div class="battle-portrait"></div><div>${htmlEscape(enemy?.name || "Enemy")}</div>`
+            className: `battle-slot ${enemy?.isDown ? "down" : ""}`,
+            html: renderCombatActorCard(enemy)
           }));
         });
       }
@@ -818,18 +955,31 @@ window.GrabLabUI = (() => {
 
     if (allyField) {
       U.emptyEl(allyField);
-      const allies = [
-        { name: S.getPlayer()?.name || "Ranger" },
-        ...U.toArray(combat.allies)
-      ];
+      const allies = U.toArray(combat.allies);
 
-      allies.forEach((ally) => {
+      if (!allies.length) {
         allyField.appendChild(U.createEl("div", {
           className: "battle-slot",
-          html: `<div class="battle-portrait"></div><div>${htmlEscape(ally?.name || "Ally")}</div>`
+          html: `<div class="battle-portrait"></div><div>No allies loaded</div>`
         }));
-      });
+      } else {
+        allies.forEach((ally) => {
+          allyField.appendChild(U.createEl("div", {
+            className: `battle-slot ${ally?.isDown ? "down" : ""}`,
+            html: renderCombatActorCard(ally)
+          }));
+        });
+      }
     }
+
+    if (logEl) {
+      const logLines = U.toArray(combat.log).slice(-20);
+      U.setText(logEl, logLines.length ? logLines.join("\n") : "Combat log empty.");
+    }
+
+    const combatApi = getCombatApi();
+    combatApi?.renderBattlefieldSelections?.();
+    combatApi?.bindCombatButtons?.();
   }
 
   function renderMiniMapVisibility() {
@@ -843,6 +993,7 @@ window.GrabLabUI = (() => {
   function applyUiSettings() {
     const settings = S.getSettings();
     const app = el("app");
+
     if (app) {
       app.style.setProperty("--ui-scale", String(settings.uiScale || 1));
     }
@@ -879,11 +1030,10 @@ window.GrabLabUI = (() => {
       U.emptyEl(selectEl);
 
       options.forEach((option, i) => {
-        const value = mapper ? mapper(option, i).value : String(option);
-        const label = mapper ? mapper(option, i).label : String(option);
+        const mapped = mapper ? mapper(option, i) : { value: String(option), label: String(option) };
         const opt = document.createElement("option");
-        opt.value = value;
-        opt.textContent = label;
+        opt.value = mapped.value;
+        opt.textContent = mapped.label;
         selectEl.appendChild(opt);
       });
     }
@@ -935,13 +1085,11 @@ window.GrabLabUI = (() => {
 
     U.emptyEl(list);
 
-    const perks = [
+    [
       "Starts with a field knife and basic fishing kit",
       "Knows how to identify suspicious swamp nonsense",
       "Can survive on spite, coffee, and mildly cursed berries"
-    ];
-
-    perks.forEach((perk) => {
+    ].forEach((perk) => {
       const li = document.createElement("li");
       li.textContent = `• ${perk}`;
       list.appendChild(li);
@@ -982,7 +1130,7 @@ window.GrabLabUI = (() => {
 
     switch (normalized) {
       case "messy":
-        return "radial-gradient(circle at 50% 19%, rgba(255,255,255,0.05) 0 2%, transparent 2.2%), radial-gradient(ellipse at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 13%, transparent 13.4%), radial-gradient(circle at 40% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 5.2%, transparent 5.4%), radial-gradient(circle at 61% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.8%, transparent 5.1%)";
+        return "radial-gradient(ellipse at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 13%, transparent 13.4%), radial-gradient(circle at 40% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 5.2%, transparent 5.4%), radial-gradient(circle at 61% 14%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.8%, transparent 5.1%)";
       case "long":
         return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 12.5%, transparent 12.9%), linear-gradient(180deg, transparent 0 23%, var(--creator-hair-color, rgba(62,37,15,0.92)) 23% 46%, transparent 46.4%)";
       case "ponytail":
@@ -990,7 +1138,7 @@ window.GrabLabUI = (() => {
       case "shaved":
         return "radial-gradient(circle at 50% 19%, rgba(70,52,39,0.35) 0 10.5%, transparent 10.9%)";
       case "field disaster":
-        return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 11.7%, transparent 12.1%), radial-gradient(circle at 33% 18%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4%, transparent 4.4%), radial-gradient(circle at 66% 15%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.5%, transparent 4.9%), radial-gradient(circle at 57% 11%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 2.4%, transparent 2.7%)";
+        return "radial-gradient(circle at 50% 20%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 11.7%, transparent 12.1%), radial-gradient(circle at 33% 18%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4%, transparent 4.4%), radial-gradient(circle at 66% 15%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 4.5%, transparent 4.9%)";
       case "short":
       default:
         return "radial-gradient(circle at 50% 22%, var(--creator-hair-color, rgba(62,37,15,0.92)) 0 12%, transparent 12.4%)";
@@ -1028,17 +1176,9 @@ window.GrabLabUI = (() => {
     const preview = el("creatorPreviewAvatar") || document.querySelector(".avatar-preview");
     if (!preview) return;
 
-    const hairLayer =
-      preview.querySelector(".avatar-hair") ||
-      document.querySelector(".avatar-hair");
-
-    const outfitLayer =
-      preview.querySelector(".avatar-outfit") ||
-      document.querySelector(".avatar-outfit");
-
-    const accessoryLayer =
-      preview.querySelector(".avatar-accessory") ||
-      document.querySelector(".avatar-accessory");
+    const hairLayer = preview.querySelector(".avatar-hair") || document.querySelector(".avatar-hair");
+    const outfitLayer = preview.querySelector(".avatar-outfit") || document.querySelector(".avatar-outfit");
+    const accessoryLayer = preview.querySelector(".avatar-accessory") || document.querySelector(".avatar-accessory");
 
     const hairStyle = el("creatorHairStyle")?.value || "Short";
     const hairColor = el("creatorHairColor")?.value || "Brown";
@@ -1049,8 +1189,6 @@ window.GrabLabUI = (() => {
 
     const hairColorCss = getCreatorColorValue(hairColor);
     const outfitColorCss = getCreatorOutfitValue(outfit);
-    const hairBg = getHairShapeCss(hairStyle);
-    const accessoryBg = getAccessoryCss(specialty, traitA, traitB);
 
     preview.style.setProperty("--creator-hair-color", hairColorCss);
     preview.style.setProperty("--creator-outfit-color", outfitColorCss);
@@ -1060,17 +1198,9 @@ window.GrabLabUI = (() => {
     preview.dataset.outfit = outfit;
     preview.dataset.specialty = specialty;
 
-    if (hairLayer) {
-      hairLayer.style.background = hairBg;
-    }
-
-    if (outfitLayer) {
-      outfitLayer.style.background = `linear-gradient(180deg, transparent 0 45%, ${outfitColorCss} 45% 68%, transparent 68%)`;
-    }
-
-    if (accessoryLayer) {
-      accessoryLayer.style.background = accessoryBg;
-    }
+    if (hairLayer) hairLayer.style.background = getHairShapeCss(hairStyle);
+    if (outfitLayer) outfitLayer.style.background = `linear-gradient(180deg, transparent 0 45%, ${outfitColorCss} 45% 68%, transparent 68%)`;
+    if (accessoryLayer) accessoryLayer.style.background = getAccessoryCss(specialty, traitA, traitB);
   }
 
   function updateCreatorPreview() {
@@ -1119,6 +1249,8 @@ window.GrabLabUI = (() => {
     const btnContinue = el("btnContinue");
     const btnNewGame = el("btnNewGame");
     const btnLoadGame = el("btnLoadGame");
+    const btnOpenSettings = el("btnOpenSettings");
+    const btnOpenCredits = el("btnOpenCredits");
     const btnBackToBoot = el("btnBackToBootFromCreator");
     const btnStartGame = el("btnStartGame");
 
@@ -1148,6 +1280,20 @@ window.GrabLabUI = (() => {
     if (btnLoadGame) {
       U.on(btnLoadGame, "click", () => {
         renderSaveSlots();
+        M.openModal("saveLoadModal");
+      });
+    }
+
+    if (btnOpenSettings) {
+      U.on(btnOpenSettings, "click", () => {
+        renderSettingsModal();
+        M.openModal("settingsModal");
+      });
+    }
+
+    if (btnOpenCredits) {
+      U.on(btnOpenCredits, "click", () => {
+        S.addToast("Grab Lab prototype by your extremely tired field station crew.", "info");
       });
     }
 
@@ -1361,8 +1507,10 @@ window.GrabLabUI = (() => {
         breedingModal: "btnBreed",
         fishingModal: "btnFish"
       }[modalId];
+
       const btn = btnId ? el(btnId) : null;
       if (!btn) return;
+
       U.on(btn, "click", () => {
         M.openModal(modalId);
         afterOpen?.();
@@ -1376,17 +1524,13 @@ window.GrabLabUI = (() => {
       window.GL_MAP?.drawMap?.();
     });
     openModal("boatModal", renderBoatModal);
-    openModal("craftModal", () => {
-      window.GL_CRAFTING?.renderCraftingPanel?.();
-    });
+    openModal("craftModal", renderCraftModal);
     openModal("journalModal", renderJournalModal);
     openModal("dnaModal", renderDnaModal);
     openModal("breedingModal", () => {
-      window.GL_BREEDING?.renderBreedingPanel?.();
+      getBreedingApi()?.renderBreedingPanel?.();
     });
-    openModal("fishingModal", () => {
-      window.GL_FISHING?.renderFishingPanel?.();
-    });
+    openModal("fishingModal", renderFishingModal);
 
     const btnBase = el("btnBase");
     if (btnBase) {
@@ -1414,29 +1558,25 @@ window.GrabLabUI = (() => {
         renderBaseModal();
       });
     }
+
+    const btnTutorial = el("btnTutorial");
+    if (btnTutorial) {
+      U.on(btnTutorial, "click", () => {
+        M.openModal("tutorialModal");
+        renderTutorialModal();
+      });
+    }
+
+    const btnAdmin = el("btnAdmin");
+    if (btnAdmin) {
+      U.on(btnAdmin, "click", () => {
+        M.openModal("adminModal");
+        renderAdminModal();
+      });
+    }
   }
 
   function bindActionButtons() {
-    const actions = [
-      ["btnInteract", "You inspect the area. Nothing explodes. Encouraging."],
-      ["btnHarvest", "You gather a few useful materials."],
-      ["btnCastLine", "You cast your line into suspiciously patient water."],
-      ["btnUseTool", "You fiddle with your tool like a trained professional."],
-      ["btnAttack", "You lash out at the nearest fungal menace."],
-      ["btnSneak", "You attempt stealth. Nature remains unconvinced."],
-      ["btnRest", "You catch your breath for a moment."]
-    ];
-
-    actions.forEach(([id, message]) => {
-      const btn = el(id);
-      if (!btn) return;
-
-      U.on(btn, "click", () => {
-        S.logActivity(message, "info");
-        renderActivityLog();
-      });
-    });
-
     const btnPause = el("btnPause");
     if (btnPause) {
       U.on(btnPause, "click", () => {
@@ -1444,6 +1584,48 @@ window.GrabLabUI = (() => {
         S.updateWorld({ isPaused: paused });
         U.setText(btnPause, paused ? "Resume" : "Pause");
         S.addToast(paused ? "Game paused." : "Game resumed.", paused ? "warning" : "success");
+      });
+    }
+
+    const btnCastLine = el("btnCastLine");
+    if (btnCastLine) {
+      U.on(btnCastLine, "click", () => {
+        const fishing = getFishingApi();
+        if (fishing?.castLine) {
+          fishing.castLine();
+        } else {
+          M.openModal("fishingModal");
+          renderFishingModal();
+          S.logActivity("Open Fishing to cast, place passive lines, or collect catches.", "info");
+        }
+      });
+    }
+
+    const btnUseTool = el("btnUseTool");
+    if (btnUseTool) {
+      U.on(btnUseTool, "click", () => {
+        M.openModal("inventoryModal");
+        renderInventoryModal();
+        S.logActivity("Tool use is handled through Inventory, Fishing, Build, and Crafting systems.", "info");
+      });
+    }
+
+    const btnSneak = el("btnSneak");
+    if (btnSneak) {
+      U.on(btnSneak, "click", () => {
+        S.logActivity("You attempt stealth. The swamp pretends not to notice.", "info");
+        renderActivityLog();
+      });
+    }
+
+    const btnRest = el("btnRest");
+    if (btnRest) {
+      U.on(btnRest, "click", () => {
+        S.modifyPlayerStat?.("stamina", 12);
+        S.modifyPlayerStat?.("morale", 2);
+        S.logActivity("You catch your breath and recover a little stamina.", "success");
+        renderHud();
+        renderActivityLog();
       });
     }
 
@@ -1458,31 +1640,7 @@ window.GrabLabUI = (() => {
   }
 
   function bindSearchInputs() {
-    const inventorySearch = el("inventorySearch");
-    const craftSearch = el("craftSearch");
     const dnaSearch = el("dnaSearch");
-
-    if (inventorySearch) {
-      U.on(inventorySearch, "input", U.debounce(() => {
-        const needle = inventorySearch.value.trim().toLowerCase();
-        const nodes = U.qsa(".inventory-slot", el("inventoryGrid"));
-        nodes.forEach((node) => {
-          const title = (node.title || "").toLowerCase();
-          node.style.display = !needle || title.includes(needle) ? "" : "none";
-        });
-      }, 120));
-    }
-
-    if (craftSearch) {
-      U.on(craftSearch, "input", U.debounce(() => {
-        const needle = craftSearch.value.trim().toLowerCase();
-        const cards = U.qsa("#recipeList .card");
-        cards.forEach((card) => {
-          const text = (card.textContent || "").toLowerCase();
-          card.style.display = !needle || text.includes(needle) ? "" : "none";
-        });
-      }, 120));
-    }
 
     if (dnaSearch) {
       U.on(dnaSearch, "input", U.debounce(() => {
@@ -1537,36 +1695,63 @@ window.GrabLabUI = (() => {
     U.eventBus.on("playerStats:changed", renderHud);
     U.eventBus.on("world:changed", renderEverything);
     U.eventBus.on("world:timeChanged", renderHud);
+
     U.eventBus.on("party:changed", () => {
       renderPartyMini();
       renderPartyModal();
+      renderInventoryModal();
     });
-    U.eventBus.on("base:changed", renderBaseModal);
+
+    U.eventBus.on("base:changed", () => {
+      renderBaseModal();
+      renderPartyModal();
+      renderDnaModal();
+    });
+
     U.eventBus.on("boat:changed", renderBoatModal);
+
     U.eventBus.on("quests:changed", () => {
       renderTrackedTasks();
       renderJournalModal();
     });
-    U.eventBus.on("inventory:changed", renderInventoryModal);
+
+    U.eventBus.on("inventory:changed", () => {
+      renderInventoryModal();
+      renderCraftModal();
+      renderBaseModal();
+    });
+
     U.eventBus.on("ui:activityLogged", renderActivityLog);
     U.eventBus.on("ui:toastAdded", pushToastToDom);
     U.eventBus.on("ui:toastRemoved", removeToastFromDom);
+
     U.eventBus.on("combat:started", () => {
       renderCombatShell();
       showScreen("combat");
     });
+
+    U.eventBus.on("combat:changed", renderCombatShell);
+
     U.eventBus.on("combat:ended", () => {
       renderCombatShell();
       showScreen("game");
+      renderEverything();
     });
+
     U.eventBus.on("settings:changed", () => {
       renderSettingsModal();
       applyUiSettings();
     });
+
     U.eventBus.on("saveLoad:slotSaved", renderSaveSlots);
     U.eventBus.on("saveLoad:slotDeleted", renderSaveSlots);
     U.eventBus.on("saveLoad:autosaved", renderSaveSlots);
     U.eventBus.on("saveLoad:autosaveDeleted", renderSaveSlots);
+
+    U.eventBus.on("world:poiResolved", () => {
+      renderNearbyList();
+      renderMapModal();
+    });
   }
 
   function seedDemoUiState() {

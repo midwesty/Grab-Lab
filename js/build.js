@@ -41,17 +41,10 @@ window.GrabLabBuild = (() => {
   function ensureBoatBuckets() {
     const boat = S.getBoat();
 
-    if (!Array.isArray(boat.modules)) {
-      boat.modules = [];
-    }
-
-    if (!Array.isArray(boat.habitats)) {
-      boat.habitats = [];
-    }
-
-    if (!Number.isFinite(Number(boat.storageSlotsBonus))) {
-      boat.storageSlotsBonus = 0;
-    }
+    if (!Array.isArray(boat.modules)) boat.modules = [];
+    if (!Array.isArray(boat.habitats)) boat.habitats = [];
+    if (!Number.isFinite(Number(boat.storageSlotsBonus))) boat.storageSlotsBonus = 0;
+    if (!Array.isArray(boat.upgradesUnlocked)) boat.upgradesUnlocked = [];
 
     return boat;
   }
@@ -59,12 +52,23 @@ window.GrabLabBuild = (() => {
   function ensureBaseTrapBuckets() {
     const base = S.getBase();
 
-    if (!Array.isArray(base.traps)) {
-      base.traps = [];
-    }
+    if (!Array.isArray(base.traps)) base.traps = [];
+    if (!Array.isArray(base.trapCatchHistory)) base.trapCatchHistory = [];
 
-    if (!Array.isArray(base.trapCatchHistory)) {
-      base.trapCatchHistory = [];
+    if (AN?.ensureAnimalBuckets) {
+      AN.ensureAnimalBuckets();
+    } else {
+      if (!Array.isArray(base.habitats)) base.habitats = [];
+      if (!Array.isArray(base.specimens)) base.specimens = [];
+      if (!Array.isArray(base.cryoFridge)) base.cryoFridge = [];
+      if (!base.cryoFridgeMeta || typeof base.cryoFridgeMeta !== "object") {
+        base.cryoFridgeMeta = {
+          name: "Cryo Fridge",
+          description: "A starter cold-storage unit for keeping captured specimens safe indefinitely.",
+          capacity: 999,
+          unlockedAt: U.isoNow()
+        };
+      }
     }
 
     return base;
@@ -100,6 +104,7 @@ window.GrabLabBuild = (() => {
 
   function getStructureCategory(def) {
     if (def?.category) return def.category;
+
     const tags = getStructureTags(def);
 
     if (tags.includes("habitat")) return "habitat";
@@ -109,6 +114,7 @@ window.GrabLabBuild = (() => {
     if (tags.includes("boat_upgrade")) return "boat_upgrade";
     if (tags.includes("utility")) return "utility";
     if (tags.includes("farming")) return "farming";
+    if (tags.includes("trap")) return "trap";
 
     return "general";
   }
@@ -149,6 +155,8 @@ window.GrabLabBuild = (() => {
   }
 
   function getInventoryAmount(itemId, source = "all") {
+    if (!itemId) return 0;
+
     if (source === "base") return S.getItemQuantity("base", itemId);
     if (source === "boat") return S.getItemQuantity("boat", itemId);
     if (source === "player") return S.getItemQuantity("player", itemId);
@@ -181,7 +189,7 @@ window.GrabLabBuild = (() => {
   }
 
   function meetsTileRequirement(def, tileX = null, tileY = null, target = "base") {
-    if (!CFG.BUILDING.allowBuildOnClearedTilesOnly) return true;
+    if (!CFG.BUILDING?.allowBuildOnClearedTilesOnly) return true;
     if (target === "boat") return true;
     if (isBoatBuild(def)) return true;
 
@@ -202,6 +210,7 @@ window.GrabLabBuild = (() => {
 
   function canBuildStructure(structureId, options = {}) {
     const def = getStructure(structureId);
+
     if (!def) {
       return { ok: false, reason: "Structure not found." };
     }
@@ -270,14 +279,15 @@ window.GrabLabBuild = (() => {
 
   function addBaseStructure(structureId, quantity = 1) {
     const structures = getBaseStructures();
+    const qty = Math.max(1, Number(quantity || 1));
     const existing = structures.find((entry) => entry.structureId === structureId);
 
     if (existing) {
-      existing.quantity = Number(existing.quantity || 0) + Math.max(1, Number(quantity || 1));
+      existing.quantity = Number(existing.quantity || 0) + qty;
     } else {
       structures.push({
         structureId,
-        quantity: Math.max(1, Number(quantity || 1))
+        quantity: qty
       });
     }
 
@@ -286,15 +296,18 @@ window.GrabLabBuild = (() => {
   }
 
   function addBoatModule(structureId, quantity = 1) {
+    ensureBoatBuckets();
+
     const modules = getBoatModules();
+    const qty = Math.max(1, Number(quantity || 1));
     const existing = modules.find((entry) => entry.structureId === structureId);
 
     if (existing) {
-      existing.quantity = Number(existing.quantity || 0) + Math.max(1, Number(quantity || 1));
+      existing.quantity = Number(existing.quantity || 0) + qty;
     } else {
       modules.push({
         structureId,
-        quantity: Math.max(1, Number(quantity || 1))
+        quantity: qty
       });
     }
 
@@ -316,9 +329,9 @@ window.GrabLabBuild = (() => {
       water: Boolean(def.water),
       flying: Boolean(def.flying),
       hostTarget: "boat",
-      occupants: [],
-      cleanliness: 75,
-      comfort: 70,
+      occupants: U.toArray(options.occupants),
+      cleanliness: Number(options.cleanliness ?? 75),
+      comfort: Number(options.comfort ?? 70),
       notes: options.notes || "Installed on the boat."
     };
   }
@@ -327,6 +340,7 @@ window.GrabLabBuild = (() => {
     const boat = ensureBoatBuckets();
     const habitats = U.toArray(boat.habitats);
     const habitat = createBoatHabitat(structureId, options);
+
     if (!habitat) return null;
 
     habitats.push(habitat);
@@ -415,7 +429,7 @@ window.GrabLabBuild = (() => {
     }
 
     if (qty > 1) {
-      S.logActivity(`Multiple copies installed to expand capacity faster.`, "info");
+      S.logActivity("Multiple copies installed to expand capacity faster.", "info");
     }
   }
 
@@ -427,7 +441,8 @@ window.GrabLabBuild = (() => {
 
     if (getStructureTags(def).includes("storage")) {
       if (target === "boat") {
-        const current = Number(S.getBoat()?.storageSlotsBonus || 0);
+        const boat = ensureBoatBuckets();
+        const current = Number(boat.storageSlotsBonus || 0);
         S.updateBoat({
           storageSlotsBonus: current + (Number(def.storageBonus || 10) * qty)
         });
@@ -440,7 +455,7 @@ window.GrabLabBuild = (() => {
     }
 
     if (getStructureTags(def).includes("boat_upgrade")) {
-      const boat = S.getBoat();
+      const boat = ensureBoatBuckets();
       const hpBonus = Number(def.boatHpBonus || 0) * qty;
       const fuelBonus = Number(def.boatFuelBonus || 0) * qty;
 
@@ -463,7 +478,7 @@ window.GrabLabBuild = (() => {
             name: def.name || U.titleCase(def.id),
             notes: "Installed on the boat."
           });
-        } else {
+        } else if (AN?.addHabitat) {
           AN.addHabitat(def.id, {
             name: def.name || U.titleCase(def.id)
           });
@@ -516,11 +531,11 @@ window.GrabLabBuild = (() => {
 
     if (getStructureTags(def).includes("habitat")) {
       if (target === "boat") {
-        const nextHabitats = getBoatHabitats();
-        const idx = nextHabitats.findIndex((entry) => entry.structureId === def.id);
+        const habitats = getBoatHabitats();
+        const idx = habitats.findIndex((entry) => entry.structureId === def.id);
         if (idx >= 0) {
-          nextHabitats.splice(idx, 1);
-          S.updateBoat({ habitats: nextHabitats });
+          habitats.splice(idx, 1);
+          S.updateBoat({ habitats });
         }
       } else {
         const habitats = U.toArray(S.getBase()?.habitats);
@@ -580,9 +595,7 @@ window.GrabLabBuild = (() => {
         source: "item"
       }));
 
-    if (fromItems.length) {
-      return fromItems;
-    }
+    if (fromItems.length) return fromItems;
 
     return getFallbackTrapDefs().map((entry) => ({
       ...entry,
@@ -595,28 +608,21 @@ window.GrabLabBuild = (() => {
   }
 
   function getAvailableTrapPlacementOptions() {
-    const defs = getTrapItemDefs();
-
-    return defs
+    return getTrapItemDefs()
       .map((def) => {
         const fromInv = def.source === "item" ? getInventoryAmount(def.id, "all") : Infinity;
         const costs = U.toArray(def.cost || []);
-        const craftableFallback = def.source === "fallback"
+        const fallbackBuildable = def.source === "fallback"
           ? costs.every((cost) => getInventoryAmount(cost.itemId, "all") >= Number(cost.quantity || 1))
           : true;
 
         return {
           ...def,
           availableCount: Number.isFinite(fromInv) ? fromInv : 999,
-          canPlace: def.source === "item" ? fromInv > 0 : craftableFallback
+          canPlace: def.source === "item" ? fromInv > 0 : fallbackBuildable
         };
       })
       .filter((entry) => entry.canPlace);
-  }
-
-  function getTrapDisplayName(trapItemId) {
-    const def = getTrapDefById(trapItemId);
-    return def?.name || U.titleCase(trapItemId || "trap");
   }
 
   function removeTrapPlacementCost(trapDef, preferredSources = ["player", "base", "boat"]) {
@@ -633,11 +639,13 @@ window.GrabLabBuild = (() => {
     }
 
     const costs = U.toArray(trapDef.cost || []);
+
     for (const cost of costs) {
       let remaining = Number(cost.quantity || 1);
 
       for (const source of preferredSources) {
         if (remaining <= 0) break;
+
         const available = getInventoryAmount(cost.itemId, source);
         if (available <= 0) continue;
 
@@ -656,8 +664,10 @@ window.GrabLabBuild = (() => {
 
   function createTrapRecord(trapItemId, options = {}) {
     const def = getTrapDefById(trapItemId);
-    const tile = S.getCurrentMapTile();
     const world = S.getWorld();
+    const tile = options.tileX != null && options.tileY != null
+      ? S.getMapTile(options.tileX, options.tileY)
+      : S.getCurrentMapTile();
 
     return {
       id: options.id || U.uid("trap"),
@@ -671,10 +681,10 @@ window.GrabLabBuild = (() => {
       cycleMinutes: Number(options.cycleMinutes || def?.cycleMinutes || 60),
       catchChance: Number(options.catchChance || def?.catchChance || 0.35),
       baitItemId: options.baitItemId || null,
-      active: true,
-      elapsedMinutes: 0,
-      catchesPending: [],
-      lastTriggeredAt: null,
+      active: options.active !== false,
+      elapsedMinutes: Number(options.elapsedMinutes || 0),
+      catchesPending: U.toArray(options.catchesPending),
+      lastTriggeredAt: options.lastTriggeredAt || null,
       notes: options.notes || ""
     };
   }
@@ -692,10 +702,12 @@ window.GrabLabBuild = (() => {
     const traps = getBaseTraps();
     const trap = createTrapRecord(trapItemId, options);
     traps.push(trap);
+
     S.updateBase({ traps });
 
     P.awardSkillXp?.("trapping", 4, "placing trap");
     P.awardPlayerXp?.(4, `placing ${trap.name}`);
+
     S.logActivity(`Placed ${trap.name} at ${trap.locationLabel}.`, "success");
     S.addToast(`Placed ${trap.name}`, "success");
 
@@ -732,9 +744,8 @@ window.GrabLabBuild = (() => {
     const trap = traps.find((entry) => entry.id === trapId);
     if (!trap) return false;
 
-    const available = getInventoryAmount(baitItemId, "all");
-    if (available <= 0) {
-      S.addToast(`No ${baitItemId} available.`, "warning");
+    if (getInventoryAmount(baitItemId, "all") <= 0) {
+      S.addToast(`No ${U.titleCase(baitItemId)} available.`, "warning");
       return false;
     }
 
@@ -759,6 +770,7 @@ window.GrabLabBuild = (() => {
     const traps = getBaseTraps();
     const trap = traps.find((entry) => entry.id === trapId);
     if (!trap) return false;
+
     trap.catchesPending = [];
     S.updateBase({ traps });
     return true;
@@ -770,6 +782,7 @@ window.GrabLabBuild = (() => {
 
     const poiSpecies = tilePois
       .filter((poi) => poi?.speciesId)
+      .filter((poi) => poi.type === "capturable_animal" || poi.type === "wild_animal")
       .map((poi) => poi.speciesId);
 
     const biomeId = trap.biomeId || tile?.biomeId || S.getWorld()?.currentBiomeId;
@@ -778,14 +791,32 @@ window.GrabLabBuild = (() => {
     const biomeMatches = defs
       .filter((entry) => entry?.id)
       .filter((entry) => {
+        const tags = U.toArray(entry.tags);
+        const aquatic = entry.habitatType === "aquarium" || entry.habitat === "river_channel" || tags.includes("fish") || tags.includes("aquatic");
+
         if (trap.trapType === "water") {
-          return entry.habitatType === "aquarium" || entry.habitat === "river_channel" || entry.habitat === biomeId;
+          return aquatic || entry.habitat === biomeId;
         }
-        return entry.habitat === biomeId || entry.habitatType === "general";
+
+        return !aquatic && (entry.habitat === biomeId || entry.habitatType === "general");
       })
       .map((entry) => entry.id);
 
-    const merged = U.uniqueBy([...poiSpecies, ...biomeMatches], (x) => String(x));
+    const player = S.getPlayer();
+    const discovered = U.toArray(player?.discoveredSpecies);
+
+    const discoveredMatches = discovered.filter((speciesId) => {
+      const def = S.getAnimalDef(speciesId);
+      if (!def) return false;
+
+      const tags = U.toArray(def.tags);
+      const aquatic = def.habitatType === "aquarium" || def.habitat === "river_channel" || tags.includes("fish") || tags.includes("aquatic");
+
+      if (trap.trapType === "water") return aquatic;
+      return !aquatic;
+    });
+
+    const merged = U.uniqueBy([...poiSpecies, ...discoveredMatches, ...biomeMatches], (x) => String(x));
 
     if (merged.length) return merged;
     if (trap.trapType === "water") return ["mud_minnow"];
@@ -799,9 +830,7 @@ window.GrabLabBuild = (() => {
     const skillBonus = Math.min(0.22, trappingSkill * 0.012);
     const chance = U.clamp(Number(trap.catchChance || 0.35) + baitBonus + skillBonus, 0.05, 0.95);
 
-    if (Math.random() > chance) {
-      return null;
-    }
+    if (Math.random() > chance) return null;
 
     const speciesId = U.pick(pool);
     if (!speciesId) return null;
@@ -824,7 +853,7 @@ window.GrabLabBuild = (() => {
     traps.forEach((trap) => {
       if (!trap.active) return;
 
-      trap.elapsedMinutes = Number(trap.elapsedMinutes || 0) + gameMinutes;
+      trap.elapsedMinutes = Number(trap.elapsedMinutes || 0) + Number(gameMinutes || 0);
       const cycle = Math.max(5, Number(trap.cycleMinutes || 60));
 
       while (trap.elapsedMinutes >= cycle) {
@@ -833,6 +862,7 @@ window.GrabLabBuild = (() => {
         changed = true;
 
         const catchResult = rollTrapCatch(trap);
+
         if (catchResult) {
           trap.catchesPending = U.toArray(trap.catchesPending);
           trap.catchesPending.push(catchResult);
@@ -843,6 +873,9 @@ window.GrabLabBuild = (() => {
             trapName: trap.name,
             locationLabel: trap.locationLabel
           });
+
+          if (history.length > 80) history.length = 80;
+
           S.updateBase({ trapCatchHistory: history });
 
           P.awardSkillXp?.("trapping", 2, "trap cycle");
@@ -868,6 +901,7 @@ window.GrabLabBuild = (() => {
     if (!trap) return [];
 
     const pending = U.toArray(trap.catchesPending);
+
     if (!pending.length) {
       S.addToast("No catches waiting.", "warning");
       return [];
@@ -883,11 +917,9 @@ window.GrabLabBuild = (() => {
           notes: `Collected from ${trap.name} at ${trap.locationLabel}.`
         });
 
-        if (specimen) {
-          created.push(specimen);
-        }
+        if (specimen) created.push(specimen);
       } catch (err) {
-        console.warn("Trap collect failed:", err);
+        U.warn("Trap collect failed:", err);
       }
     });
 
@@ -897,6 +929,7 @@ window.GrabLabBuild = (() => {
     if (created.length) {
       P.awardSkillXp?.("trapping", 6 + created.length, "collecting trap catches");
       P.awardPlayerXp?.(4 + created.length, "collecting trap catches");
+
       S.logActivity(`Collected ${created.length} catch(es) from ${trap.name}.`, "success");
       S.addToast(`Collected ${created.length} catch${created.length === 1 ? "" : "es"}`, "success");
     }
@@ -911,6 +944,7 @@ window.GrabLabBuild = (() => {
     if (!specimen) return null;
 
     const habitats = U.toArray(S.getBase()?.habitats);
+
     for (const habitat of habitats) {
       const compat = AN.getHabitatCompatibility(specimen, habitat);
       if (compat.ok) return habitat;
@@ -922,8 +956,7 @@ window.GrabLabBuild = (() => {
   function bindSpecimenActionButtons(root) {
     U.qsa(".btn-feed-specimen", root).forEach((btn) => {
       U.on(btn, "click", () => {
-        const specimenId = btn.dataset.specimenId;
-        AN.feedSpecimen(specimenId, 15);
+        AN.feedSpecimen(btn.dataset.specimenId, 15);
         renderBaseEnhancements();
         UI.renderEverything();
       });
@@ -950,10 +983,40 @@ window.GrabLabBuild = (() => {
       });
     });
 
-    U.qsa(".btn-party-specimen", root).forEach((btn) => {
+    U.qsa(".btn-assign-specimen-habitat", root).forEach((btn) => {
       U.on(btn, "click", () => {
         const specimenId = btn.dataset.specimenId;
-        const added = AN.addSpecimenToParty(specimenId);
+        const habitatId = btn.dataset.habitatId;
+
+        const result = AN.assignSpecimenToHabitat(specimenId, habitatId);
+        if (!result?.ok) {
+          S.addToast(result?.reason || "Could not move specimen.", "error");
+          return;
+        }
+
+        renderBaseEnhancements();
+        UI.renderEverything();
+      });
+    });
+
+    U.qsa(".btn-cryo-specimen", root).forEach((btn) => {
+      U.on(btn, "click", () => {
+        const specimenId = btn.dataset.specimenId;
+
+        const result = AN.moveSpecimenToCryo(specimenId);
+        if (!result?.ok) {
+          S.addToast(result?.reason || "Could not move to Cryo Fridge.", "error");
+          return;
+        }
+
+        renderBaseEnhancements();
+        UI.renderEverything();
+      });
+    });
+
+    U.qsa(".btn-party-specimen", root).forEach((btn) => {
+      U.on(btn, "click", () => {
+        const added = AN.addSpecimenToParty(btn.dataset.specimenId);
         if (!added) {
           S.addToast("Could not add to active party.", "warning");
           return;
@@ -966,8 +1029,7 @@ window.GrabLabBuild = (() => {
 
     U.qsa(".btn-reserve-specimen", root).forEach((btn) => {
       U.on(btn, "click", () => {
-        const specimenId = btn.dataset.specimenId;
-        const added = AN.sendSpecimenToReserve(specimenId);
+        const added = AN.sendSpecimenToReserve(btn.dataset.specimenId);
         if (!added) {
           S.addToast("Could not send to reserve.", "warning");
           return;
@@ -980,8 +1042,7 @@ window.GrabLabBuild = (() => {
 
     U.qsa(".btn-release-specimen", root).forEach((btn) => {
       U.on(btn, "click", () => {
-        const specimenId = btn.dataset.specimenId;
-        const ok = AN.releaseSpecimen(specimenId, { reason: "manual_release" });
+        const ok = AN.releaseSpecimen(btn.dataset.specimenId, { reason: "manual_release" });
         if (!ok) {
           S.addToast("Could not release specimen.", "error");
           return;
@@ -1021,11 +1082,14 @@ window.GrabLabBuild = (() => {
         const traps = getBaseTraps();
         const trap = traps.find((entry) => entry.id === btn.dataset.trapId);
         if (!trap) return;
+
         trap.elapsedMinutes = 0;
         trap.active = true;
         S.updateBase({ traps });
         S.logActivity(`Reset ${trap.name}.`, "info");
+
         renderBaseEnhancements();
+        UI.renderEverything();
       });
     });
 
@@ -1057,6 +1121,7 @@ window.GrabLabBuild = (() => {
             }).join("")
         }
       </div>
+
       <div class="card">
         <div class="meta-title">Boat Habitats</div>
         ${
@@ -1066,6 +1131,7 @@ window.GrabLabBuild = (() => {
               const occupants = U.toArray(entry.occupants)
                 .map((id) => AN.getSpecimen(id)?.name || id)
                 .join(", ");
+
               return `
                 <div class="meta-sub">
                   ${htmlEscape(entry.name || entry.structureId)} • ${htmlEscape(entry.habitatType || "general")} • Cap ${htmlEscape(String(entry.capacity || 0))}
@@ -1076,6 +1142,7 @@ window.GrabLabBuild = (() => {
             }).join("")
         }
       </div>
+
       <div class="card">
         <div class="meta-title">Unlocked Upgrades</div>
         <div class="meta-sub">${htmlEscape(U.toArray(boat?.upgradesUnlocked).join(", ") || "None")}</div>
@@ -1093,6 +1160,8 @@ window.GrabLabBuild = (() => {
     const structures = getBaseStructures();
     const habitats = U.toArray(base?.habitats);
     const specimens = AN.getBaseSpecimens();
+    const cryoEntries = AN.getCryoFridgeEntries ? AN.getCryoFridgeEntries() : U.toArray(base?.cryoFridge);
+    const cryoMeta = AN.getCryoMeta ? AN.getCryoMeta() : { name: "Cryo Fridge", capacity: 999 };
     const traps = getBaseTraps();
     const trapOptions = getAvailableTrapPlacementOptions();
 
@@ -1101,28 +1170,32 @@ window.GrabLabBuild = (() => {
       <p><strong>Structures:</strong> ${htmlEscape(String(structures.length))}</p>
       <p><strong>Habitats:</strong> ${htmlEscape(String(habitats.length))}</p>
       <p><strong>Captured Specimens:</strong> ${htmlEscape(String(specimens.length))}</p>
+      <p><strong>Cryo Fridge:</strong> ${htmlEscape(String(cryoEntries.length))} / ${htmlEscape(String(cryoMeta.capacity || 999))}</p>
       <p><strong>Active Traps:</strong> ${htmlEscape(String(traps.length))}</p>
       <p><strong>Storage Bonus:</strong> ${htmlEscape(String(base?.storageSlotsBonus || 0))}</p>
 
       <h4 style="margin-top:1rem;">Structures</h4>
       <div class="card-list">
-        ${structures.map((entry) => {
-          const def = getStructure(entry.structureId);
-          return `
-            <div class="card">
-              <div class="meta-title">${htmlEscape(def?.name || entry.structureId)}</div>
-              <div class="meta-sub">Quantity: ${htmlEscape(String(entry.quantity || 1))}</div>
-            </div>
-          `;
-        }).join("") || `<div class="card">No structures built yet.</div>`}
+        ${
+          structures.length
+            ? structures.map((entry) => {
+              const def = getStructure(entry.structureId);
+              return `
+                <div class="card">
+                  <div class="meta-title">${htmlEscape(def?.name || entry.structureId)}</div>
+                  <div class="meta-sub">Quantity: ${htmlEscape(String(entry.quantity || 1))}</div>
+                </div>
+              `;
+            }).join("")
+            : `<div class="card">No structures built yet.</div>`
+        }
       </div>
 
       <h4 style="margin-top:1rem;">Habitats</h4>
       <div class="card-list">
         ${
-          !habitats.length
-            ? `<div class="card">No habitats built yet.</div>`
-            : habitats.map((habitat) => {
+          habitats.length
+            ? habitats.map((habitat) => {
               const occupantNames = U.toArray(habitat.occupants)
                 .map((id) => AN.getSpecimen(id)?.name || id)
                 .join(", ");
@@ -1131,8 +1204,45 @@ window.GrabLabBuild = (() => {
                 <div class="card">
                   <div class="meta-title">${htmlEscape(habitat.name || habitat.structureId)}</div>
                   <div class="meta-sub">Type: ${htmlEscape(habitat.habitatType || "general")}</div>
-                  <div class="meta-sub">Capacity: ${htmlEscape(String(habitat.capacity || 0))}</div>
+                  <div class="meta-sub">Capacity: ${htmlEscape(String(U.toArray(habitat.occupants).length))} / ${htmlEscape(String(habitat.capacity || 0))}</div>
                   <div class="meta-sub">Occupants: ${htmlEscape(occupantNames || "None")}</div>
+                </div>
+              `;
+            }).join("")
+            : `<div class="card">No habitats built yet.</div>`
+        }
+      </div>
+
+      <h4 style="margin-top:1rem;">Cryo Fridge</h4>
+      <div class="card-list" id="baseCryoCards">
+        <div class="card">
+          <div class="meta-title">${htmlEscape(cryoMeta.name || "Cryo Fridge")}</div>
+          <div class="meta-sub">${htmlEscape(cryoMeta.description || "Captured animals can be stored here safely until a proper habitat is ready.")}</div>
+          <div class="meta-sub">Stored: ${htmlEscape(String(cryoEntries.length))} / ${htmlEscape(String(cryoMeta.capacity || 999))}</div>
+          <div class="meta-sub">Cryo specimens do not lose hunger, comfort, or cleanliness, but they cannot breed until moved into a habitat.</div>
+        </div>
+        ${
+          !cryoEntries.length
+            ? `<div class="card">Cryo storage is empty.</div>`
+            : cryoEntries.map((specimenId) => {
+              const specimen = AN.getSpecimen(specimenId);
+              const compatible = specimen ? AN.getCompatibleHabitatsForSpecimen(specimen.id) : [];
+
+              return `
+                <div class="card">
+                  <div class="meta-title">${htmlEscape(specimen?.name || specimenId)}</div>
+                  <div class="meta-sub">${htmlEscape(U.titleCase(specimen?.speciesId || "creature"))} • safely suspended</div>
+                  <div class="admin-console-actions" style="margin-top:.6rem;">
+                    ${
+                      compatible.length
+                        ? compatible.map((habitat) => `
+                          <button class="ghost-btn btn-assign-specimen-habitat" data-specimen-id="${htmlEscape(specimen.id)}" data-habitat-id="${htmlEscape(habitat.id)}">
+                            Move to ${htmlEscape(habitat.name || "Habitat")}
+                          </button>
+                        `).join("")
+                        : `<button class="ghost-btn" disabled>No compatible habitat</button>`
+                    }
+                  </div>
                 </div>
               `;
             }).join("")
@@ -1153,10 +1263,10 @@ window.GrabLabBuild = (() => {
               : `<div class="meta-sub">No trap items ready. Bring or craft a trap item, or keep rope/fiber on hand for fallback traps.</div>`
           }
         </div>
+
         ${
-          !traps.length
-            ? `<div class="card">No traps placed yet.</div>`
-            : traps.map((trap) => `
+          traps.length
+            ? traps.map((trap) => `
               <div class="card">
                 <div class="meta-title">${htmlEscape(trap.name)}</div>
                 <div class="meta-sub">${htmlEscape(trap.locationLabel || "Unknown location")} • ${htmlEscape(trap.biomeId || "unknown biome")}</div>
@@ -1171,27 +1281,46 @@ window.GrabLabBuild = (() => {
                 </div>
               </div>
             `).join("")
+            : `<div class="card">No traps placed yet.</div>`
         }
       </div>
 
       <h4 style="margin-top:1rem;">Specimens</h4>
       <div class="card-list" id="baseSpecimenCards">
         ${
-          !specimens.length
-            ? `<div class="card">No captured specimens yet.</div>`
-            : specimens.map((specimen) => {
+          specimens.length
+            ? specimens.map((specimen) => {
               const habitat = AN.getSpecimenHabitat(specimen.id);
+              const inCryo = AN.isSpecimenInCryo ? AN.isSpecimenInCryo(specimen.id) : cryoEntries.includes(specimen.id);
+              const locationLabel = AN.getSpecimenLocationLabel
+                ? AN.getSpecimenLocationLabel(specimen.id, specimen.storage)
+                : habitat?.name || (inCryo ? "Cryo Fridge" : "Unassigned");
+
+              const compatibleHabitats = AN.getCompatibleHabitatsForSpecimen(specimen.id)
+                .filter((hab) => hab.id !== habitat?.id);
+
               return `
                 <div class="card">
                   <div class="meta-title">${htmlEscape(specimen.name || specimen.speciesId)}</div>
                   <div class="meta-sub">${htmlEscape(U.titleCase(specimen.speciesId || "creature"))} • Level ${htmlEscape(String(specimen.level || 1))}</div>
-                  <div class="meta-sub">Habitat: ${htmlEscape(habitat?.name || "Unassigned")}</div>
+                  <div class="meta-sub">Location: ${htmlEscape(locationLabel)}</div>
+                  <div class="meta-sub">Habitat Type: ${htmlEscape(specimen.habitatType || "general")} • Storage: ${htmlEscape(specimen.storage || "unassigned")}</div>
                   <div class="meta-sub">Hunger: ${htmlEscape(String(Math.round(specimen?.needs?.hunger ?? 0)))}</div>
                   <div class="meta-sub">Comfort: ${htmlEscape(String(Math.round(specimen?.needs?.comfort ?? 0)))}</div>
                   <div class="meta-sub">Cleanliness: ${htmlEscape(String(Math.round(specimen?.needs?.cleanliness ?? 0)))}</div>
                   <div class="admin-console-actions" style="margin-top:.6rem;">
                     <button class="ghost-btn btn-feed-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Feed</button>
                     <button class="ghost-btn btn-assign-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Auto-Assign Habitat</button>
+                    ${
+                      compatibleHabitats.length
+                        ? compatibleHabitats.map((habitatOption) => `
+                          <button class="ghost-btn btn-assign-specimen-habitat" data-specimen-id="${htmlEscape(specimen.id)}" data-habitat-id="${htmlEscape(habitatOption.id)}">
+                            Move to ${htmlEscape(habitatOption.name || "Habitat")}
+                          </button>
+                        `).join("")
+                        : ""
+                    }
+                    <button class="ghost-btn btn-cryo-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Move to Cryo</button>
                     <button class="secondary-btn btn-party-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Add to Party</button>
                     <button class="ghost-btn btn-reserve-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Send to Reserve</button>
                     <button class="ghost-btn btn-release-specimen" data-specimen-id="${htmlEscape(specimen.id)}">Release</button>
@@ -1199,6 +1328,7 @@ window.GrabLabBuild = (() => {
                 </div>
               `;
             }).join("")
+            : `<div class="card">No captured specimens yet.</div>`
         }
       </div>
     `;
@@ -1213,6 +1343,7 @@ window.GrabLabBuild = (() => {
 
     const qty = Math.max(1, Number(options.quantity || 1));
     const target = options.target || state.selectedBuildTarget;
+
     const validation = canBuildStructure(structureId, { ...options, target });
     if (!validation.ok) {
       throw new Error(validation.reason);
@@ -1231,13 +1362,14 @@ window.GrabLabBuild = (() => {
       target
     });
 
-    P.registerBuildAction();
-    P.awardPlayerXp(6 + qty * 2, `building ${getStructureName(structureId)}`);
+    P.registerBuildAction?.();
+    P.awardPlayerXp?.(6 + qty * 2, `building ${getStructureName(structureId)}`);
 
     S.logActivity(`Built ${getStructureName(structureId)} x${qty} for the ${target}.`, "success");
     S.addToast(`Built ${getStructureName(structureId)}`, "success");
 
     renderBuildPanels();
+    renderBaseEnhancements();
     UI.renderEverything();
 
     return true;
@@ -1245,6 +1377,8 @@ window.GrabLabBuild = (() => {
 
   function demolishStructure(structureId, options = {}) {
     const def = getStructure(structureId);
+    if (!def) return false;
+
     const qty = Math.max(1, Number(options.quantity || 1));
     const target = options.target || "base";
 
@@ -1254,19 +1388,22 @@ window.GrabLabBuild = (() => {
       if (!existing) return false;
 
       existing.quantity = Number(existing.quantity || 0) - qty;
-      const next = modules.filter((entry) => Number(entry.quantity || 0) > 0);
-      S.updateBoat({ modules: next });
+      S.updateBoat({
+        modules: modules.filter((entry) => Number(entry.quantity || 0) > 0)
+      });
     } else {
       const structures = getBaseStructures();
       const existing = structures.find((entry) => entry.structureId === structureId);
       if (!existing) return false;
 
       existing.quantity = Number(existing.quantity || 0) - qty;
-      const next = structures.filter((entry) => Number(entry.quantity || 0) > 0);
-      S.updateBase({ structures: next });
+      S.updateBase({
+        structures: structures.filter((entry) => Number(entry.quantity || 0) > 0)
+      });
     }
 
-    const refundRatio = Number(options.refundRatio ?? CFG.BUILDING.refundRatioOnDemolish ?? 0.5);
+    const refundRatio = Number(options.refundRatio ?? CFG.BUILDING?.refundRatioOnDemolish ?? 0.5);
+
     getStructureCost(def).forEach((cost) => {
       const refund = Math.floor(Number(cost.quantity || 1) * qty * refundRatio);
       if (refund > 0) {
@@ -1277,7 +1414,9 @@ window.GrabLabBuild = (() => {
     reverseStructureEffects(def, { quantity: qty, target });
 
     S.logActivity(`Demolished ${getStructureName(structureId)} x${qty} from the ${target}.`, "warning");
+
     renderBuildPanels();
+    renderBaseEnhancements();
     UI.renderEverything();
     return true;
   }
@@ -1332,35 +1471,22 @@ window.GrabLabBuild = (() => {
 
     const lines = [];
 
-    if (def.id === "animal_pen_t1") {
-      lines.push(`Creates a land-animal habitat on the ${target}.`);
-    }
-    if (def.id === "aquarium_t1") {
-      lines.push(`Creates an aquatic habitat on the ${target}.`);
-    }
-    if (def.id === "aviary_t1") {
-      lines.push(`Creates a flying-creature habitat on the ${target}.`);
-    }
-    if (def.id === "breeding_tank_t1") {
-      lines.push(`Supports breeding projects on the ${target}.`);
-    }
-    if (def.id === "workbench_t1") {
-      lines.push(`Enables workbench recipes on the ${target}.`);
-    }
-    if (def.id === "field_stove_t1") {
-      lines.push(`Enables water/cooking recipes on the ${target}.`);
-    }
+    if (def.id === "animal_pen_t1") lines.push(`Creates a land-animal habitat on the ${target}.`);
+    if (def.id === "aquarium_t1") lines.push(`Creates an aquatic habitat on the ${target}.`);
+    if (def.id === "aviary_t1") lines.push(`Creates a flying-creature habitat on the ${target}.`);
+    if (def.id === "breeding_tank_t1") lines.push(`Supports breeding projects on the ${target}.`);
+    if (def.id === "workbench_t1") lines.push(`Enables workbench recipes on the ${target}.`);
+    if (def.id === "field_stove_t1") lines.push(`Enables water/cooking recipes on the ${target}.`);
+
     if (getStructureTags(def).includes("storage")) {
       lines.push(`Adds ${Number(def.storageBonus || 10)} storage slots.`);
     }
+
     if (getStructureTags(def).includes("boat_upgrade")) {
-      if (Number(def.boatHpBonus || 0) > 0) {
-        lines.push(`Adds ${Number(def.boatHpBonus || 0)} boat HP.`);
-      }
-      if (Number(def.boatFuelBonus || 0) > 0) {
-        lines.push(`Adds ${Number(def.boatFuelBonus || 0)} boat fuel capacity.`);
-      }
+      if (Number(def.boatHpBonus || 0) > 0) lines.push(`Adds ${Number(def.boatHpBonus || 0)} boat HP.`);
+      if (Number(def.boatFuelBonus || 0) > 0) lines.push(`Adds ${Number(def.boatFuelBonus || 0)} boat fuel capacity.`);
     }
+
     if (def.stationId) {
       lines.push(`Unlocks station: ${U.titleCase(def.stationId)}.`);
     }
@@ -1392,11 +1518,13 @@ window.GrabLabBuild = (() => {
     ];
 
     const catHost = U.byId("buildCategoryFilters");
+
     categories.forEach((category) => {
       const btn = U.createEl("button", {
         className: category === state.selectedCategory ? "primary-btn" : "ghost-btn",
         text: category === "all" ? "All" : U.titleCase(category)
       });
+
       U.on(btn, "click", () => setBuildCategory(category));
       catHost.appendChild(btn);
     });
@@ -1410,28 +1538,27 @@ window.GrabLabBuild = (() => {
         text: "No structures available for this filter."
       }));
       detailHost.innerHTML = `<h3>Build Menu</h3><p>Select a structure.</p>`;
-      return;
-    }
+    } else {
+      structures.forEach((def) => {
+        const data = getBuildableDisplayData(def);
+        const card = U.createEl("div", { className: "card" });
 
-    structures.forEach((def) => {
-      const data = getBuildableDisplayData(def);
-      const card = U.createEl("div", { className: "card" });
+        card.innerHTML = `
+          <div class="meta-title">${htmlEscape(def.name || U.titleCase(def.id))}</div>
+          <div class="meta-sub">${htmlEscape(getStructureCategory(def))}</div>
+          <div class="meta-sub">${htmlEscape(state.selectedBuildTarget === "boat" ? "Boat Install" : "Base Build")}</div>
+          <div class="meta-sub">${data.buildOk ? "Ready to build" : "Requirements unmet"}</div>
+        `;
 
-      card.innerHTML = `
-        <div class="meta-title">${htmlEscape(def.name || U.titleCase(def.id))}</div>
-        <div class="meta-sub">${htmlEscape(getStructureCategory(def))}</div>
-        <div class="meta-sub">${htmlEscape(state.selectedBuildTarget === "boat" ? "Boat Install" : "Base Build")}</div>
-        <div class="meta-sub">${data.buildOk ? "Ready to build" : "Requirements unmet"}</div>
-      `;
+        U.on(card, "click", () => {
+          selectStructure(def.id);
+        });
 
-      U.on(card, "click", () => {
-        selectStructure(def.id);
+        cardsHost.appendChild(card);
       });
 
-      cardsHost.appendChild(card);
-    });
-
-    detailHost.innerHTML = `<h3>Build Menu</h3><p>Select a structure.</p>`;
+      detailHost.innerHTML = `<h3>Build Menu</h3><p>Select a structure.</p>`;
+    }
 
     const btnBase = U.byId("btnBuildTargetBase");
     const btnBoat = U.byId("btnBuildTargetBoat");
@@ -1507,6 +1634,7 @@ window.GrabLabBuild = (() => {
         const ok = demolishStructure(def.id, {
           target: state.selectedBuildTarget
         });
+
         if (!ok) {
           S.addToast("Nothing to demolish.", "warning");
         }
@@ -1661,6 +1789,53 @@ window.GrabLabBuild = (() => {
     return true;
   }
 
+  function ensureStarterBuiltStructureEffects() {
+    const base = S.getBase();
+    const structures = getBaseStructures();
+    const existingHabitats = U.toArray(base?.habitats);
+
+    structures.forEach((entry) => {
+      const def = getStructure(entry.structureId);
+      if (!def) return;
+
+      setStructureUnlockFlags(def, "base");
+
+      if (getStructureTags(def).includes("storage") && !base._starterStorageEffectsApplied) {
+        const current = Number(base.storageSlotsBonus || 0);
+        S.updateBase({
+          storageSlotsBonus: current + (Number(def.storageBonus || 10) * Math.max(1, Number(entry.quantity || 1)))
+        });
+      }
+
+      if (getStructureTags(def).includes("habitat")) {
+        const desired = Math.max(1, Number(entry.quantity || 1));
+        const have = existingHabitats.filter((hab) => hab.structureId === entry.structureId).length;
+        const missing = Math.max(0, desired - have);
+
+        for (let i = 0; i < missing; i += 1) {
+          try {
+            AN.addHabitat(entry.structureId, {
+              name: def.name || U.titleCase(def.id),
+              notes: "Starter/base structure habitat synced from built structures."
+            });
+          } catch (err) {
+            U.warn("Could not sync starter habitat", entry.structureId, err);
+          }
+        }
+      }
+    });
+
+    if (!base._starterStorageEffectsApplied) {
+      S.updateBase({ _starterStorageEffectsApplied: true });
+    }
+
+    if (AN.ensureAnimalBuckets) {
+      AN.ensureAnimalBuckets();
+    }
+
+    return true;
+  }
+
   function bindEvents() {
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "baseModal" || modalId === "boatModal") {
@@ -1692,6 +1867,7 @@ window.GrabLabBuild = (() => {
     U.eventBus.on("world:timeChanged", ({ minute }) => {
       if (minute % 5 === 0) {
         tickTraps(5);
+
         if (S.isModalOpen("baseModal")) {
           renderBaseEnhancements();
         }
@@ -1713,6 +1889,7 @@ window.GrabLabBuild = (() => {
 
     ensureBaseTrapBuckets();
     seedFallbackStructuresIfNeeded();
+    ensureStarterBuiltStructureEffects();
     bindEvents();
     renderBuildPanels();
 
@@ -1781,7 +1958,8 @@ window.GrabLabBuild = (() => {
     renderBaseEnhancements,
     renderBuildPanels,
 
-    seedFallbackStructuresIfNeeded
+    seedFallbackStructuresIfNeeded,
+    ensureStarterBuiltStructureEffects
   };
 
   window.GL_BUILD = API;

@@ -12,6 +12,15 @@ window.GrabLabCrafting = (() => {
     selectedStationTarget: "base" // base | boat | all
   };
 
+  function htmlEscape(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
   function getRecipes() {
     return U.toArray(S.getData()?.recipes);
   }
@@ -20,7 +29,14 @@ window.GrabLabCrafting = (() => {
     return S.getRecipeDef(recipeId) || null;
   }
 
+  function ensureCraftingBuckets() {
+    const base = S.getBase();
+    if (!Array.isArray(base.craftingQueues)) base.craftingQueues = [];
+    return base;
+  }
+
   function getCraftingQueues() {
+    ensureCraftingBuckets();
     return U.toArray(S.getBase()?.craftingQueues);
   }
 
@@ -38,26 +54,33 @@ window.GrabLabCrafting = (() => {
   }
 
   function getRecipeStation(recipe) {
-    return recipe?.station || "workbench";
+    return recipe?.station || recipe?.stationId || "workbench";
+  }
+
+  function getStructureStationIds(entry) {
+    const def = S.getStructureDef(entry?.structureId);
+    if (!def) return [];
+
+    const stationIds = new Set();
+
+    U.toArray(def.stations).forEach((stationId) => stationIds.add(stationId));
+    if (def.stationId) stationIds.add(def.stationId);
+    if (U.toArray(def.tags).includes("crafting")) stationIds.add(def.id);
+
+    if (def.id === "field_stove_t1") stationIds.add("stove");
+    if (def.id === "breeding_tank_t1") stationIds.add("breeding_tank");
+    if (def.id === "workbench_t1") stationIds.add("workbench");
+
+    return [...stationIds];
   }
 
   function getBaseBuiltStations() {
-    const base = S.getBase();
-    const structures = U.toArray(base?.structures);
+    const structures = U.toArray(S.getBase()?.structures);
     const stationIds = new Set();
 
     structures.forEach((entry) => {
-      const def = S.getStructureDef(entry.structureId);
-      if (!def) return;
-
-      U.toArray(def.stations).forEach((stationId) => stationIds.add(stationId));
-      if (def.stationId) stationIds.add(def.stationId);
-      if (U.toArray(def.tags).includes("crafting")) stationIds.add(def.id);
+      getStructureStationIds(entry).forEach((stationId) => stationIds.add(stationId));
     });
-
-    if (stationIds.has("field_stove_t1")) stationIds.add("stove");
-    if (stationIds.has("breeding_tank_t1")) stationIds.add("breeding_tank");
-    if (stationIds.has("workbench_t1")) stationIds.add("workbench");
 
     return [...stationIds];
   }
@@ -67,17 +90,8 @@ window.GrabLabCrafting = (() => {
     const stationIds = new Set();
 
     modules.forEach((entry) => {
-      const def = S.getStructureDef(entry.structureId);
-      if (!def) return;
-
-      U.toArray(def.stations).forEach((stationId) => stationIds.add(stationId));
-      if (def.stationId) stationIds.add(def.stationId);
-      if (U.toArray(def.tags).includes("crafting")) stationIds.add(def.id);
+      getStructureStationIds(entry).forEach((stationId) => stationIds.add(stationId));
     });
-
-    if (stationIds.has("field_stove_t1")) stationIds.add("stove");
-    if (stationIds.has("breeding_tank_t1")) stationIds.add("breeding_tank");
-    if (stationIds.has("workbench_t1")) stationIds.add("workbench");
 
     return [...stationIds];
   }
@@ -122,6 +136,7 @@ window.GrabLabCrafting = (() => {
       .map((input) => {
         const needed = Number(input.quantity || 1) * Math.max(1, Number(quantity || 1));
         const have = getInventoryAmount(input.itemId, source);
+
         return {
           itemId: input.itemId,
           needed,
@@ -136,27 +151,22 @@ window.GrabLabCrafting = (() => {
     const station = getRecipeStation(recipe);
     if (!station || station === "none") return true;
 
-    const accessible = getAccessibleStations(target);
-    return accessible.includes(station);
+    return getAccessibleStations(target).includes(station);
   }
 
   function getStationFailureReason(recipe, target = state.selectedStationTarget || "all") {
     const station = getRecipeStation(recipe);
     if (!station || station === "none") return "";
 
-    if (target === "boat") {
-      return `Required station unavailable on boat: ${station}`;
-    }
-
-    if (target === "base") {
-      return `Required station unavailable at base: ${station}`;
-    }
+    if (target === "boat") return `Required station unavailable on boat: ${station}`;
+    if (target === "base") return `Required station unavailable at base: ${station}`;
 
     return `Required station unavailable: ${station}`;
   }
 
   function canCraft(recipeId, quantity = 1, source = "all", target = state.selectedStationTarget || "all") {
     const recipe = getRecipe(recipeId);
+
     if (!recipe) {
       return { ok: false, reason: "Recipe not found." };
     }
@@ -180,43 +190,45 @@ window.GrabLabCrafting = (() => {
   }
 
   function removeIngredients(recipe, quantity = 1, preferredSources = ["player", "base", "boat"]) {
-    const inputs = getRecipeInputs(recipe);
-
-    for (const input of inputs) {
+    getRecipeInputs(recipe).forEach((input) => {
       let remaining = Number(input.quantity || 1) * Math.max(1, Number(quantity || 1));
 
-      for (const source of preferredSources) {
-        if (remaining <= 0) break;
+      preferredSources.forEach((source) => {
+        if (remaining <= 0) return;
 
         const available = getInventoryAmount(input.itemId, source);
-        if (available <= 0) continue;
+        if (available <= 0) return;
 
         const take = Math.min(available, remaining);
         S.removeItem(source, input.itemId, take);
         remaining -= take;
-      }
+      });
 
       if (remaining > 0) {
         throw new Error(`Failed to remove enough ${input.itemId}.`);
       }
-    }
+    });
 
     return true;
   }
 
   function addOutputs(recipe, quantity = 1, target = "player") {
-    const outputs = getRecipeOutputs(recipe);
-
-    outputs.forEach((output) => {
+    getRecipeOutputs(recipe).forEach((output) => {
       const amount = Number(output.quantity || 1) * Math.max(1, Number(quantity || 1));
       S.addItem(target, output.itemId, amount);
+    });
+
+    U.eventBus.emit("crafting:outputsAdded", {
+      recipeId: recipe?.id,
+      quantity,
+      target
     });
 
     return true;
   }
 
   function getRecipeDurationMinutes(recipe) {
-    return Number(recipe?.durationMinutes || recipe?.craftTimeMinutes || 15);
+    return Math.max(0, Number(recipe?.durationMinutes || recipe?.craftTimeMinutes || 15));
   }
 
   function createCraftingJob(recipeId, quantity = 1, options = {}) {
@@ -225,23 +237,34 @@ window.GrabLabCrafting = (() => {
 
     const source = options.source || "all";
     const stationTarget = options.stationTarget || state.selectedStationTarget || "all";
+    const qty = Math.max(1, Number(quantity || 1));
 
-    const validation = canCraft(recipeId, quantity, source, stationTarget);
-    if (!validation.ok) {
-      throw new Error(validation.reason);
+    const validation = canCraft(recipeId, qty, source, stationTarget);
+    if (!validation.ok) throw new Error(validation.reason);
+
+    removeIngredients(recipe, qty, options.preferredSources || ["player", "base", "boat"]);
+
+    const duration = getRecipeDurationMinutes(recipe);
+
+    if (duration <= 0 || options.instant) {
+      addOutputs(recipe, qty, options.outputTarget || "player");
+      P.registerCraftAction?.();
+      P.awardPlayerXp?.(4 + qty, `crafting ${getRecipeName(recipeId)}`);
+      S.logActivity(`Crafted ${getRecipeName(recipeId)} x${qty}.`, "success");
+      S.addToast(`Crafted ${getRecipeName(recipeId)}`, "success");
+      renderCraftingPanel();
+      return null;
     }
-
-    removeIngredients(recipe, quantity, options.preferredSources || ["player", "base", "boat"]);
 
     const job = {
       id: U.uid("craft"),
       recipeId,
-      quantity: Math.max(1, Number(quantity || 1)),
+      quantity: qty,
       station: getRecipeStation(recipe),
       stationTarget,
       startedAt: U.isoNow(),
       progressMinutes: 0,
-      durationMinutes: getRecipeDurationMinutes(recipe),
+      durationMinutes: duration,
       outputTarget: options.outputTarget || "player",
       status: "active"
     };
@@ -250,7 +273,9 @@ window.GrabLabCrafting = (() => {
     queues.push(job);
     S.updateBase({ craftingQueues: queues });
 
-    P.registerCraftAction();
+    P.registerCraftAction?.();
+    P.awardSkillXp?.("crafting", 3, "starting craft");
+
     S.logActivity(`Started crafting ${getRecipeName(recipeId)} x${job.quantity}.`, "success");
     S.addToast(`Crafting ${getRecipeName(recipeId)}...`, "success");
     renderCraftingPanel();
@@ -264,17 +289,19 @@ window.GrabLabCrafting = (() => {
 
     const source = options.source || "all";
     const stationTarget = options.stationTarget || state.selectedStationTarget || "all";
+    const qty = Math.max(1, Number(quantity || 1));
 
-    const validation = canCraft(recipeId, quantity, source, stationTarget);
+    const validation = canCraft(recipeId, qty, source, stationTarget);
     if (!validation.ok) throw new Error(validation.reason);
 
-    removeIngredients(recipe, quantity, options.preferredSources || ["player", "base", "boat"]);
-    addOutputs(recipe, quantity, options.outputTarget || "player");
+    removeIngredients(recipe, qty, options.preferredSources || ["player", "base", "boat"]);
+    addOutputs(recipe, qty, options.outputTarget || "player");
 
-    P.registerCraftAction();
-    P.awardPlayerXp(4 + quantity, `crafting ${getRecipeName(recipeId)}`);
+    P.registerCraftAction?.();
+    P.awardSkillXp?.("crafting", 4 + qty, "instant craft");
+    P.awardPlayerXp?.(4 + qty, `crafting ${getRecipeName(recipeId)}`);
 
-    S.logActivity(`Crafted ${getRecipeName(recipeId)} x${quantity}.`, "success");
+    S.logActivity(`Crafted ${getRecipeName(recipeId)} x${qty}.`, "success");
     S.addToast(`Crafted ${getRecipeName(recipeId)}`, "success");
     renderCraftingPanel();
 
@@ -288,23 +315,28 @@ window.GrabLabCrafting = (() => {
   function updateCraftingJob(jobId, patch = {}) {
     const queues = getCraftingQueues();
     const target = queues.find((job) => job.id === jobId);
+
     if (!target) return null;
 
     Object.assign(target, U.deepMerge(target, patch));
     S.updateBase({ craftingQueues: queues });
+
     return target;
   }
 
-  function cancelCraftingJob(jobId, refundRatio = CFG.BUILDING.refundRatioOnDemolish) {
+  function cancelCraftingJob(jobId, refundRatio = CFG.BUILDING?.refundRatioOnDemolish ?? 0.5) {
     const queues = getCraftingQueues();
     const job = queues.find((entry) => entry.id === jobId);
+
     if (!job) return false;
 
     const recipe = getRecipe(job.recipeId);
+
     if (recipe) {
       getRecipeInputs(recipe).forEach((input) => {
         const original = Number(input.quantity || 1) * Number(job.quantity || 1);
         const refund = Math.floor(original * Number(refundRatio || 0));
+
         if (refund > 0) {
           S.addItem("player", input.itemId, refund);
         }
@@ -315,16 +347,20 @@ window.GrabLabCrafting = (() => {
     S.updateBase({ craftingQueues: next });
 
     S.logActivity(`Cancelled crafting job ${getRecipeName(job.recipeId)}.`, "warning");
+    S.addToast("Crafting job cancelled.", "warning");
     renderCraftingPanel();
+
     return true;
   }
 
   function completeCraftingJob(jobId) {
     const queues = getCraftingQueues();
     const job = queues.find((entry) => entry.id === jobId);
+
     if (!job) return null;
 
     const recipe = getRecipe(job.recipeId);
+
     if (!recipe) {
       cancelCraftingJob(jobId, 0);
       return null;
@@ -335,7 +371,8 @@ window.GrabLabCrafting = (() => {
     const next = queues.filter((entry) => entry.id !== jobId);
     S.updateBase({ craftingQueues: next });
 
-    P.awardPlayerXp(5 + Number(job.quantity || 1), `completing ${getRecipeName(job.recipeId)}`);
+    P.awardSkillXp?.("crafting", 5 + Number(job.quantity || 1), "completed craft");
+    P.awardPlayerXp?.(5 + Number(job.quantity || 1), `completing ${getRecipeName(job.recipeId)}`);
 
     S.logActivity(`Finished crafting ${getRecipeName(job.recipeId)} x${job.quantity}.`, "success");
     S.addToast(`${getRecipeName(job.recipeId)} complete`, "success");
@@ -346,6 +383,7 @@ window.GrabLabCrafting = (() => {
 
   function tickCraftingQueues(gameMinutes = 5) {
     const queues = getCraftingQueues();
+
     if (!queues.length) return false;
 
     let changed = false;
@@ -354,7 +392,7 @@ window.GrabLabCrafting = (() => {
     queues.forEach((job) => {
       if (job.status !== "active") return;
 
-      job.progressMinutes = Number(job.progressMinutes || 0) + gameMinutes;
+      job.progressMinutes = Number(job.progressMinutes || 0) + Number(gameMinutes || 0);
       changed = true;
 
       if (job.progressMinutes >= Number(job.durationMinutes || 0)) {
@@ -373,23 +411,22 @@ window.GrabLabCrafting = (() => {
     return changed;
   }
 
-  function getRecipeDisplayData(recipe) {
-    const inputs = getRecipeInputs(recipe).map((entry) => {
-      const def = S.getItemDef(entry.itemId);
-      return {
-        ...entry,
-        name: def?.name || U.titleCase(entry.itemId),
-        have: getInventoryAmount(entry.itemId, "all")
-      };
-    });
+  function getItemName(itemId) {
+    const def = S.getItemDef(itemId);
+    return def?.name || U.titleCase(itemId || "item");
+  }
 
-    const outputs = getRecipeOutputs(recipe).map((entry) => {
-      const def = S.getItemDef(entry.itemId);
-      return {
-        ...entry,
-        name: def?.name || U.titleCase(entry.itemId)
-      };
-    });
+  function getRecipeDisplayData(recipe) {
+    const inputs = getRecipeInputs(recipe).map((entry) => ({
+      ...entry,
+      name: getItemName(entry.itemId),
+      have: getInventoryAmount(entry.itemId, "all")
+    }));
+
+    const outputs = getRecipeOutputs(recipe).map((entry) => ({
+      ...entry,
+      name: getItemName(entry.itemId)
+    }));
 
     const validation = canCraft(recipe.id, 1, "all", state.selectedStationTarget);
 
@@ -398,6 +435,7 @@ window.GrabLabCrafting = (() => {
       station: getRecipeStation(recipe),
       canCraft: validation.ok,
       reason: validation.reason || "",
+      missing: U.toArray(validation.missing),
       inputs,
       outputs
     };
@@ -407,17 +445,25 @@ window.GrabLabCrafting = (() => {
     const needle = String(searchText || "").trim().toLowerCase();
 
     return getRecipes().filter((recipe) => {
+      if (!recipe?.id) return false;
+
       if (stationFilter !== "all" && getRecipeStation(recipe) !== stationFilter) {
         return false;
       }
 
       if (!needle) return true;
 
+      const itemText = [
+        ...getRecipeInputs(recipe).map((entry) => `${entry.itemId} ${getItemName(entry.itemId)}`),
+        ...getRecipeOutputs(recipe).map((entry) => `${entry.itemId} ${getItemName(entry.itemId)}`)
+      ].join(" ");
+
       const haystack = [
         recipe.id,
         recipe.name,
         recipe.description,
-        recipe.station
+        getRecipeStation(recipe),
+        itemText
       ].join(" ").toLowerCase();
 
       return haystack.includes(needle);
@@ -442,13 +488,9 @@ window.GrabLabCrafting = (() => {
     return state.selectedStationTarget;
   }
 
-  function htmlEscape(value = "") {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
+  function getCraftOutputTargetForStationTarget(stationTarget = state.selectedStationTarget) {
+    if (stationTarget === "boat") return "boat";
+    return "player";
   }
 
   function renderRecipeList() {
@@ -470,11 +512,14 @@ window.GrabLabCrafting = (() => {
 
     recipes.forEach((recipe) => {
       const data = getRecipeDisplayData(recipe);
-      const card = U.createEl("div", { className: "card" });
+      const selected = state.selectedRecipeId === recipe.id;
+      const card = U.createEl("div", {
+        className: `card ${selected ? "selected" : ""}`
+      });
 
       card.innerHTML = `
         <div class="meta-title">${htmlEscape(recipe.name || U.titleCase(recipe.id))}</div>
-        <div class="meta-sub">${htmlEscape(recipe.station || "workbench")}</div>
+        <div class="meta-sub">${htmlEscape(data.station || "workbench")}</div>
         <div class="meta-sub">${data.canCraft ? "Ready to craft" : htmlEscape(data.reason || "Missing materials or station")}</div>
       `;
 
@@ -501,28 +546,40 @@ window.GrabLabCrafting = (() => {
     }
 
     const data = getRecipeDisplayData(recipe);
+    const duration = getRecipeDurationMinutes(recipe);
+    const outputTarget = getCraftOutputTargetForStationTarget(state.selectedStationTarget);
 
     detail.innerHTML = `
       <h3>${htmlEscape(recipe.name || U.titleCase(recipe.id))}</h3>
       <p>${htmlEscape(recipe.description || "No description yet.")}</p>
       <p><strong>Station:</strong> ${htmlEscape(data.station)}</p>
       <p><strong>Using:</strong> ${htmlEscape(U.titleCase(state.selectedStationTarget))}</p>
+      <p><strong>Duration:</strong> ${htmlEscape(String(duration))} in-game minute${duration === 1 ? "" : "s"}</p>
+      <p><strong>Output Target:</strong> ${htmlEscape(outputTarget === "boat" ? "Boat Storage" : "Backpack")}</p>
 
       <h4>Inputs</h4>
       <ul>
-        ${data.inputs.map((entry) => `
-          <li>
-            ${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity || 1))}
-            — Have ${htmlEscape(String(entry.have || 0))}
-          </li>
-        `).join("")}
+        ${
+          data.inputs.length
+            ? data.inputs.map((entry) => `
+              <li>
+                ${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity || 1))}
+                — Have ${htmlEscape(String(entry.have || 0))}
+              </li>
+            `).join("")
+            : "<li>No inputs required.</li>"
+        }
       </ul>
 
       <h4>Outputs</h4>
       <ul>
-        ${data.outputs.map((entry) => `
-          <li>${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity || 1))}</li>
-        `).join("")}
+        ${
+          data.outputs.length
+            ? data.outputs.map((entry) => `
+              <li>${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity || 1))}</li>
+            `).join("")
+            : "<li>No outputs listed.</li>"
+        }
       </ul>
 
       ${
@@ -531,9 +588,15 @@ window.GrabLabCrafting = (() => {
           : `<p class="danger-text">${htmlEscape(data.reason || "Cannot craft right now.")}</p>`
       }
 
+      ${
+        data.missing.length
+          ? `<p class="danger-text">Missing: ${htmlEscape(data.missing.map((m) => `${getItemName(m.itemId)} x${m.missing}`).join(", "))}</p>`
+          : ""
+      }
+
       <div class="admin-console-actions">
-        <button id="btnCraftOnce" class="primary-btn" ${data.canCraft ? "" : "disabled"}>Craft</button>
-        <button id="btnQueueCraft" class="secondary-btn" ${data.canCraft ? "" : "disabled"}>Queue</button>
+        <button id="btnCraftOnce" class="primary-btn" ${data.canCraft ? "" : "disabled"}>Craft Now</button>
+        <button id="btnQueueCraft" class="secondary-btn" ${data.canCraft ? "" : "disabled"}>Queue Timed Craft</button>
       </div>
     `;
 
@@ -544,7 +607,8 @@ window.GrabLabCrafting = (() => {
       U.on(btnCraftOnce, "click", () => {
         try {
           craftInstant(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget
+            stationTarget: state.selectedStationTarget,
+            outputTarget
           });
           UI.renderEverything();
         } catch (err) {
@@ -557,7 +621,8 @@ window.GrabLabCrafting = (() => {
       U.on(btnQueueCraft, "click", () => {
         try {
           createCraftingJob(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget
+            stationTarget: state.selectedStationTarget,
+            outputTarget
           });
           UI.renderEverything();
         } catch (err) {
@@ -574,15 +639,23 @@ window.GrabLabCrafting = (() => {
     const queues = getCraftingQueues();
     const queueHtml = !queues.length
       ? `<p>No active crafting jobs.</p>`
-      : queues.map((job) => `
-        <div class="card" style="margin-top:.6rem;">
-          <div class="meta-title">${htmlEscape(getRecipeName(job.recipeId))}</div>
-          <div class="meta-sub">Progress: ${htmlEscape(String(job.progressMinutes || 0))}/${htmlEscape(String(job.durationMinutes || 0))} minutes</div>
-          <div class="meta-sub">Station: ${htmlEscape(job.station || "workbench")} • ${htmlEscape(U.titleCase(job.stationTarget || "base"))}</div>
-          <div class="meta-sub">Output: ${htmlEscape(job.outputTarget || "player")}</div>
-          <button class="ghost-btn crafting-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
-        </div>
-      `).join("");
+      : queues.map((job) => {
+        const pct = U.clamp(
+          (Number(job.progressMinutes || 0) / Math.max(1, Number(job.durationMinutes || 1))) * 100,
+          0,
+          100
+        );
+
+        return `
+          <div class="card" style="margin-top:.6rem;">
+            <div class="meta-title">${htmlEscape(getRecipeName(job.recipeId))}</div>
+            <div class="meta-sub">Progress: ${htmlEscape(String(Math.floor(job.progressMinutes || 0)))}/${htmlEscape(String(job.durationMinutes || 0))} minutes (${htmlEscape(String(Math.floor(pct)))}%)</div>
+            <div class="meta-sub">Station: ${htmlEscape(job.station || "workbench")} • ${htmlEscape(U.titleCase(job.stationTarget || "base"))}</div>
+            <div class="meta-sub">Output: ${htmlEscape(job.outputTarget || "player")}</div>
+            <button class="ghost-btn crafting-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
+          </div>
+        `;
+      }).join("");
 
     detail.innerHTML += `
       <hr />
@@ -594,6 +667,7 @@ window.GrabLabCrafting = (() => {
       U.on(btn, "click", () => {
         cancelCraftingJob(btn.dataset.jobId);
         renderCraftingPanel();
+        UI.renderEverything();
       });
     });
   }
@@ -610,6 +684,10 @@ window.GrabLabCrafting = (() => {
       <div class="admin-console-actions" id="craftStationFilterButtons"></div>
       <div class="meta-title" style="margin-top:.75rem;">Use Stations From</div>
       <div class="admin-console-actions" id="craftStationTargetButtons"></div>
+      <div class="meta-sub" style="margin-top:.75rem;">
+        Base stations: ${htmlEscape(getBaseBuiltStations().join(", ") || "none")}<br />
+        Boat stations: ${htmlEscape(getBoatBuiltStations().join(", ") || "none")}
+      </div>
     `;
 
     const buttonsHost = filterCard.querySelector("#craftStationFilterButtons");
@@ -697,6 +775,19 @@ window.GrabLabCrafting = (() => {
         ]
       },
       {
+        id: "rope_bundle_from_fiber",
+        name: "Twisted Rope Bundle",
+        description: "Twist fresh fiber into a stronger, more useful bundle of rope.",
+        station: "workbench",
+        durationMinutes: 9,
+        inputs: [
+          { itemId: "fiber_bundle", quantity: 3 }
+        ],
+        outputs: [
+          { itemId: "rope_bundle", quantity: 1 }
+        ]
+      },
+      {
         id: "chameleon_juice",
         name: "Chameleon Juice",
         description: "A mutation additive for stealth-friendly offspring.",
@@ -747,11 +838,19 @@ window.GrabLabCrafting = (() => {
         renderCraftingPanel();
       }
     });
+
+    const search = U.byId("craftSearch");
+    if (search) {
+      U.on(search, "input", U.debounce(() => {
+        renderCraftingPanel();
+      }, 100));
+    }
   }
 
   function init() {
     if (state.initialized) return true;
 
+    ensureCraftingBuckets();
     seedFallbackRecipesIfNeeded();
     bindTickEvents();
     renderCraftingPanel();
@@ -766,6 +865,7 @@ window.GrabLabCrafting = (() => {
 
     getRecipes,
     getRecipe,
+    ensureCraftingBuckets,
     getCraftingQueues,
     getRecipeName,
     getRecipeInputs,
@@ -779,6 +879,7 @@ window.GrabLabCrafting = (() => {
     hasRequiredItems,
     getMissingInputs,
     canUseStation,
+    getStationFailureReason,
     canCraft,
 
     removeIngredients,
@@ -798,6 +899,7 @@ window.GrabLabCrafting = (() => {
     selectRecipe,
     setStationFilter,
     setStationTarget,
+    getCraftOutputTargetForStationTarget,
 
     renderCraftingPanel,
     seedFallbackRecipesIfNeeded

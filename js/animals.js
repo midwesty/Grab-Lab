@@ -19,24 +19,20 @@ window.GrabLabAnimals = (() => {
   function ensureAnimalBuckets() {
     const base = S.getBase();
 
-    if (!Array.isArray(base.habitats)) {
-      base.habitats = [];
-    }
+    if (!Array.isArray(base.habitats)) base.habitats = [];
+    if (!Array.isArray(base.specimens)) base.specimens = [];
+    if (!Array.isArray(base.releasedSpecimens)) base.releasedSpecimens = [];
+    if (!Array.isArray(base.breedingJobs)) base.breedingJobs = [];
+    if (!Array.isArray(base.cloneQueue)) base.cloneQueue = [];
+    if (!Array.isArray(base.cryoFridge)) base.cryoFridge = [];
 
-    if (!Array.isArray(base.specimens)) {
-      base.specimens = [];
-    }
-
-    if (!Array.isArray(base.releasedSpecimens)) {
-      base.releasedSpecimens = [];
-    }
-
-    if (!Array.isArray(base.breedingJobs)) {
-      base.breedingJobs = [];
-    }
-
-    if (!Array.isArray(base.cloneQueue)) {
-      base.cloneQueue = [];
+    if (!base.cryoFridgeMeta || typeof base.cryoFridgeMeta !== "object") {
+      base.cryoFridgeMeta = {
+        name: "Cryo Fridge",
+        description: "A starter cold-storage unit for keeping captured specimens safe indefinitely until a proper habitat is ready.",
+        capacity: 999,
+        unlockedAt: U.isoNow()
+      };
     }
 
     return base;
@@ -45,17 +41,9 @@ window.GrabLabAnimals = (() => {
   function ensurePlayerCreatureBuckets() {
     const player = S.getPlayer();
 
-    if (!Array.isArray(player.discoveredSpecies)) {
-      player.discoveredSpecies = [];
-    }
-
-    if (!Array.isArray(player.dnaRegistry)) {
-      player.dnaRegistry = [];
-    }
-
-    if (!Array.isArray(player.captureLog)) {
-      player.captureLog = [];
-    }
+    if (!Array.isArray(player.discoveredSpecies)) player.discoveredSpecies = [];
+    if (!Array.isArray(player.dnaRegistry)) player.dnaRegistry = [];
+    if (!Array.isArray(player.captureLog)) player.captureLog = [];
 
     return player;
   }
@@ -75,19 +63,21 @@ window.GrabLabAnimals = (() => {
     return U.toArray(S.getBase()?.habitats);
   }
 
-  function getHabitatDefByStructureId(structureId) {
-    const structure = S.getStructureDef(structureId);
-    if (!structure) return null;
+  function getCryoFridgeEntries() {
+    ensureAnimalBuckets();
+    return U.toArray(S.getBase()?.cryoFridge);
+  }
 
-    return {
-      id: structure.id,
-      name: structure.name || U.titleCase(structure.id),
-      habitatType: structure.habitatType || structure.capacityType || "general",
-      capacity: Number(structure.capacity || structure.maxOccupants || 2),
-      sizeLimit: structure.sizeLimit || "medium",
-      water: Boolean(structure.water),
-      flying: Boolean(structure.flying)
+  function getCryoMeta() {
+    ensureAnimalBuckets();
+    return S.getBase()?.cryoFridgeMeta || {
+      name: "Cryo Fridge",
+      capacity: 999
     };
+  }
+
+  function isSpecimenInCryo(specimenId) {
+    return getCryoFridgeEntries().includes(specimenId);
   }
 
   function getAnimalSize(speciesId) {
@@ -151,7 +141,7 @@ window.GrabLabAnimals = (() => {
     const extraTraits = U.toArray(options.traits);
     const mergedTraits = U.uniqueBy([...baseTraits, ...extraTraits], (x) => String(x));
 
-    const specimen = {
+    return {
       id: options.id || U.uid("spec"),
       speciesId,
       name: options.name || def?.defaultNickname || getAnimalName(speciesId),
@@ -184,12 +174,15 @@ window.GrabLabAnimals = (() => {
       }, options.genetics || {}),
       combatMoves: U.toArray(options.combatMoves).length ? U.toArray(options.combatMoves) : U.toArray(def?.combatMoves),
       allowedRoles: getAnimalAllowedRoles(speciesId),
+      recruitable: options.recruitable !== false,
+      storage: options.storage || "unassigned",
+      storageTarget: options.storageTarget || null,
+      habitatId: options.habitatId || null,
+      locationLabel: options.locationLabel || "Unassigned",
       capturedAt: options.capturedAt || U.isoNow(),
       lastUpdatedAt: U.isoNow(),
       notes: options.notes || ""
     };
-
-    return specimen;
   }
 
   function listSpecimensBySpecies(speciesId) {
@@ -213,19 +206,31 @@ window.GrabLabAnimals = (() => {
     return target;
   }
 
+  function setSpecimenStorage(specimenId, storage = "unassigned", details = {}) {
+    const specimen = getSpecimen(specimenId);
+    if (!specimen) return null;
+
+    specimen.storage = storage;
+    specimen.storageTarget = details.storageTarget || null;
+    specimen.habitatId = details.habitatId || null;
+    specimen.locationLabel = details.locationLabel || getSpecimenLocationLabel(specimenId, storage);
+    specimen.lastUpdatedAt = U.isoNow();
+
+    S.updateBase({ specimens: getBaseSpecimens() });
+    return specimen;
+  }
+
   function removeSpecimen(specimenId) {
     const specimens = getBaseSpecimens();
     const next = specimens.filter((entry) => entry.id !== specimenId);
 
     if (next.length === specimens.length) return false;
 
+    removeSpecimenFromHabitat(specimenId, null, { silent: true });
+    removeSpecimenFromCryo(specimenId);
+    removeSpecimenFromParty(specimenId);
+
     S.updateBase({ specimens: next });
-
-    const party = S.getParty();
-    const active = U.toArray(party.active).filter((member) => member?.sourceSpecimenId !== specimenId);
-    const reserve = U.toArray(party.reserve).filter((member) => member?.sourceSpecimenId !== specimenId);
-    S.updateParty({ active, reserve });
-
     S.logActivity(`Removed specimen ${specimenId}.`, "warning");
     return true;
   }
@@ -233,7 +238,14 @@ window.GrabLabAnimals = (() => {
   function addSpecimenToBase(specimen) {
     ensureAnimalBuckets();
     const specimens = getBaseSpecimens();
-    specimens.push(specimen);
+    const existingIndex = specimens.findIndex((entry) => entry.id === specimen.id);
+
+    if (existingIndex >= 0) {
+      specimens[existingIndex] = specimen;
+    } else {
+      specimens.push(specimen);
+    }
+
     S.updateBase({ specimens });
     return specimen;
   }
@@ -246,15 +258,12 @@ window.GrabLabAnimals = (() => {
     const existing = dnaRegistry.find((entry) => entry.speciesId === speciesId);
     if (existing) {
       existing.lastSeenAt = U.isoNow();
-      if (specimen) {
-        existing.sampleCount = Number(existing.sampleCount || 1) + 1;
-      }
+      if (specimen) existing.sampleCount = Number(existing.sampleCount || 0) + 1;
       S.updatePlayer({ dnaRegistry });
       return existing;
     }
 
     const def = getAnimalDef(speciesId);
-
     const record = {
       id: U.uid("dna"),
       speciesId,
@@ -276,7 +285,10 @@ window.GrabLabAnimals = (() => {
     ensureAnimalBuckets();
     ensurePlayerCreatureBuckets();
 
-    const specimen = createSpecimen(speciesId, options);
+    const specimen = createSpecimen(speciesId, {
+      ...options,
+      recruitable: options.recruitable !== false
+    });
     addSpecimenToBase(specimen);
 
     const player = S.getPlayer();
@@ -286,26 +298,41 @@ window.GrabLabAnimals = (() => {
       speciesId,
       specimenId: specimen.id,
       at: U.isoNow(),
-      method: options.method || "capture"
+      method: options.method || "capture",
+      tileX: options.tileX ?? S.getWorld()?.currentTileX,
+      tileY: options.tileY ?? S.getWorld()?.currentTileY
     });
 
-    S.updatePlayer({
-      captureLog
-    });
-
+    S.updatePlayer({ captureLog });
     P.discoverSpecies(speciesId);
     addDnaRecordForSpecies(speciesId, specimen);
 
+    const placement = options.skipAutoStorage
+      ? { ok: true, storage: "unassigned", reason: "Auto-storage skipped." }
+      : autoStoreCapturedSpecimen(specimen.id, options);
+
     S.logActivity(`Captured ${specimen.name} (${getAnimalName(speciesId)}).`, "success");
+
+    if (placement?.storage === "habitat") {
+      S.logActivity(`${specimen.name} was moved into ${placement.habitat?.name || "a compatible habitat"}.`, "info");
+    } else if (placement?.storage === "cryo") {
+      S.logActivity(`${specimen.name} is safe in the Cryo Fridge until you build or free up a proper habitat.`, "info");
+    } else if (placement?.reason) {
+      S.logActivity(placement.reason, "warning");
+    }
+
     S.addToast(`Captured ${specimen.name}!`, "success");
     P.awardPlayerXp(8 + specimen.level, "capturing wildlife");
-
     return specimen;
   }
 
   function releaseSpecimen(specimenId, options = {}) {
     const specimen = getSpecimen(specimenId);
     if (!specimen) return false;
+
+    removeSpecimenFromHabitat(specimenId, null, { silent: true });
+    removeSpecimenFromCryo(specimenId);
+    removeSpecimenFromParty(specimenId);
 
     const remaining = getBaseSpecimens().filter((entry) => entry.id !== specimenId);
     const released = getReleasedSpecimens();
@@ -329,6 +356,7 @@ window.GrabLabAnimals = (() => {
   function canSpecimenJoinParty(specimenId) {
     const specimen = getSpecimen(specimenId);
     if (!specimen) return { ok: false, reason: "Specimen not found." };
+    if (specimen.recruitable === false) return { ok: false, reason: "This specimen is not recruitable yet." };
 
     const active = U.toArray(S.getParty()?.active);
     if (active.length >= Math.max(0, CFG.PARTY.maxPartySize - 1)) {
@@ -380,7 +408,7 @@ window.GrabLabAnimals = (() => {
 
     const companion = specimenToCompanion(specimen, options);
     const added = S.addCompanion(companion, false);
-
+    setSpecimenStorage(specimenId, "party", { storageTarget: "active", locationLabel: "Active Party" });
     S.logActivity(`${specimen.name} joined the active party.`, "success");
     return added;
   }
@@ -390,13 +418,12 @@ window.GrabLabAnimals = (() => {
     if (!specimen) return null;
 
     const reserve = U.toArray(S.getParty()?.reserve);
-    if (reserve.some((member) => member.sourceSpecimenId === specimenId)) {
-      return reserve.find((member) => member.sourceSpecimenId === specimenId);
-    }
+    const existing = reserve.find((member) => member.sourceSpecimenId === specimenId);
+    if (existing) return existing;
 
     const companion = specimenToCompanion(specimen, options);
     const added = S.addCompanion(companion, true);
-
+    setSpecimenStorage(specimenId, "party", { storageTarget: "reserve", locationLabel: "Reserve Party" });
     S.logActivity(`${specimen.name} moved to reserve companions.`, "info");
     return added;
   }
@@ -410,8 +437,38 @@ window.GrabLabAnimals = (() => {
     if (!target) return false;
 
     S.removeCompanion(target.id);
+    const specimen = getSpecimen(specimenId);
+    if (specimen && specimen.storage === "party") {
+      setSpecimenStorage(specimenId, "unassigned", { locationLabel: "Unassigned" });
+    }
     S.logActivity(`Removed ${target.name} from the party roster.`, "info");
     return true;
+  }
+
+  function getHabitatDefByStructureId(structureId) {
+    const structure = S.getStructureDef(structureId);
+    if (!structure) return null;
+
+    return {
+      id: structure.id,
+      name: structure.name || U.titleCase(structure.id),
+      habitatType: structure.habitatType || structure.capacityType || "general",
+      capacity: Number(structure.capacity || structure.maxOccupants || 2),
+      sizeLimit: structure.sizeLimit || "medium",
+      water: Boolean(structure.water),
+      flying: Boolean(structure.flying)
+    };
+  }
+
+  function getSpecimenLocationLabel(specimenId, fallback = "unassigned") {
+    const habitat = getSpecimenHabitat(specimenId);
+    if (habitat) return habitat.name || "Habitat";
+    if (isSpecimenInCryo(specimenId)) return getCryoMeta().name || "Cryo Fridge";
+    if (U.toArray(S.getParty()?.active).some((entry) => entry.sourceSpecimenId === specimenId)) return "Active Party";
+    if (U.toArray(S.getParty()?.reserve).some((entry) => entry.sourceSpecimenId === specimenId)) return "Reserve Party";
+    if (fallback === "cryo") return getCryoMeta().name || "Cryo Fridge";
+    if (fallback === "habitat") return "Habitat";
+    return "Unassigned";
   }
 
   function getHabitatCompatibility(specimen, habitat) {
@@ -438,8 +495,12 @@ window.GrabLabAnimals = (() => {
     }
 
     if (habitatType !== "general" && specimen.habitatType !== habitatType) {
-      if (!(habitatType === "aviary" && specimen.traits.includes("flight")) &&
-          !(habitatType === "aquarium" && specimen.traits.includes("gills"))) {
+      const traits = U.toArray(specimen.traits);
+      const tags = U.toArray(specimen.tags);
+      const aquatic = traits.includes("gills") || traits.includes("swim") || tags.includes("fish") || tags.includes("aquatic");
+      const flying = traits.includes("flight") || tags.includes("bird") || tags.includes("flying");
+
+      if (!(habitatType === "aviary" && flying) && !(habitatType === "aquarium" && aquatic)) {
         return { ok: false, reason: "Habitat type is incompatible." };
       }
     }
@@ -462,8 +523,8 @@ window.GrabLabAnimals = (() => {
       sizeLimit: def.sizeLimit,
       water: def.water,
       flying: def.flying,
-      tileX: Number(options.tileX || S.getWorld().currentTileX),
-      tileY: Number(options.tileY || S.getWorld().currentTileY),
+      tileX: Number(options.tileX ?? S.getWorld().currentTileX),
+      tileY: Number(options.tileY ?? S.getWorld().currentTileY),
       occupants: U.toArray(options.occupants),
       cleanliness: Number(options.cleanliness ?? 75),
       comfort: Number(options.comfort ?? 70),
@@ -485,7 +546,21 @@ window.GrabLabAnimals = (() => {
     return getHabitats().find((entry) => entry.id === habitatId) || null;
   }
 
-  function assignSpecimenToHabitat(specimenId, habitatId) {
+  function getCompatibleHabitatsForSpecimen(specimenId) {
+    const specimen = getSpecimen(specimenId);
+    if (!specimen) return [];
+
+    return getHabitats()
+      .map((habitat) => ({ habitat, compat: getHabitatCompatibility(specimen, habitat) }))
+      .filter((entry) => entry.compat.ok)
+      .map((entry) => entry.habitat);
+  }
+
+  function findFirstCompatibleHabitat(specimenId) {
+    return getCompatibleHabitatsForSpecimen(specimenId)[0] || null;
+  }
+
+  function assignSpecimenToHabitat(specimenId, habitatId, options = {}) {
     const specimen = getSpecimen(specimenId);
     const habitats = getHabitats();
     const habitat = habitats.find((entry) => entry.id === habitatId);
@@ -502,12 +577,22 @@ window.GrabLabAnimals = (() => {
     habitat.occupants = U.toArray(habitat.occupants);
     habitat.occupants.push(specimenId);
 
-    S.updateBase({ habitats });
-    S.logActivity(`Assigned ${specimen.name} to ${habitat.name}.`, "success");
-    return { ok: true };
+    const cryo = getCryoFridgeEntries().filter((id) => id !== specimenId);
+    S.updateBase({ habitats, cryoFridge: cryo });
+    setSpecimenStorage(specimenId, "habitat", {
+      storageTarget: "base",
+      habitatId: habitat.id,
+      locationLabel: habitat.name || "Habitat"
+    });
+
+    if (!options.silent) {
+      S.logActivity(`Assigned ${specimen.name} to ${habitat.name}.`, "success");
+    }
+
+    return { ok: true, storage: "habitat", habitat };
   }
 
-  function removeSpecimenFromHabitat(specimenId, habitatId = null) {
+  function removeSpecimenFromHabitat(specimenId, habitatId = null, options = {}) {
     const habitats = getHabitats();
     let changed = false;
 
@@ -515,15 +600,18 @@ window.GrabLabAnimals = (() => {
       if (habitatId && entry.id !== habitatId) return;
       const before = U.toArray(entry.occupants).length;
       entry.occupants = U.toArray(entry.occupants).filter((id) => id !== specimenId);
-      if (entry.occupants.length !== before) {
-        changed = true;
-      }
+      if (entry.occupants.length !== before) changed = true;
     });
 
     if (changed) {
       S.updateBase({ habitats });
       const specimen = getSpecimen(specimenId);
-      S.logActivity(`Removed ${specimen?.name || specimenId} from habitat.`, "info");
+      if (specimen && specimen.storage === "habitat") {
+        setSpecimenStorage(specimenId, "unassigned", { locationLabel: "Unassigned" });
+      }
+      if (!options.silent) {
+        S.logActivity(`Removed ${specimen?.name || specimenId} from habitat.`, "info");
+      }
     }
 
     return changed;
@@ -533,16 +621,121 @@ window.GrabLabAnimals = (() => {
     return getHabitats().find((entry) => U.toArray(entry.occupants).includes(specimenId)) || null;
   }
 
-  function feedSpecimen(specimenId, amount = 10) {
+  function removeSpecimenFromCryo(specimenId) {
+    const cryo = getCryoFridgeEntries();
+    const next = cryo.filter((id) => id !== specimenId);
+    if (next.length === cryo.length) return false;
+
+    S.updateBase({ cryoFridge: next });
+    const specimen = getSpecimen(specimenId);
+    if (specimen && specimen.storage === "cryo") {
+      setSpecimenStorage(specimenId, "unassigned", { locationLabel: "Unassigned" });
+    }
+    return true;
+  }
+
+  function moveSpecimenToCryo(specimenId, options = {}) {
+    const specimen = getSpecimen(specimenId);
+    if (!specimen) return { ok: false, reason: "Specimen not found." };
+
+    removeSpecimenFromHabitat(specimenId, null, { silent: true });
+
+    const cryo = getCryoFridgeEntries().filter((id) => id !== specimenId);
+    const meta = getCryoMeta();
+    const capacity = Number(meta.capacity || 999);
+
+    if (cryo.length >= capacity) {
+      return { ok: false, reason: "Cryo Fridge is full." };
+    }
+
+    cryo.push(specimenId);
+    S.updateBase({ cryoFridge: cryo });
+    setSpecimenStorage(specimenId, "cryo", {
+      storageTarget: "base",
+      locationLabel: meta.name || "Cryo Fridge"
+    });
+
+    if (!options.silent) {
+      S.logActivity(`${specimen.name} was moved to the Cryo Fridge.`, "info");
+    }
+
+    return { ok: true, storage: "cryo", specimen };
+  }
+
+  function autoStoreCapturedSpecimen(specimenId, options = {}) {
+    const habitat = findFirstCompatibleHabitat(specimenId);
+    if (habitat) {
+      const assigned = assignSpecimenToHabitat(specimenId, habitat.id, { silent: true });
+      if (assigned?.ok) return { ok: true, storage: "habitat", habitat };
+    }
+
+    const cryo = moveSpecimenToCryo(specimenId, { silent: true });
+    if (cryo?.ok) return { ok: true, storage: "cryo" };
+
+    setSpecimenStorage(specimenId, "unassigned", { locationLabel: "Unassigned" });
+    return {
+      ok: false,
+      storage: "unassigned",
+      reason: options.failureReason || "No compatible habitat or Cryo Fridge space was available. The specimen is unassigned."
+    };
+  }
+
+  function getAnimalFeedCandidates() {
+    const preferredTags = ["animal_feed", "food", "fishing", "bait"];
+    return ["player", "base", "boat"].flatMap((source) => {
+      return U.toArray(S.getInventory(source)).map((entry) => {
+        const def = S.getItemDef(entry.itemId) || {};
+        const tags = U.toArray(def.tags);
+        const edible = preferredTags.some((tag) => tags.includes(tag)) || U.toArray(def.effects).some((effect) => effect.stat === "hunger");
+        if (!edible) return null;
+
+        const hungerEffect = U.toArray(def.effects).find((effect) => effect.stat === "hunger");
+        return {
+          source,
+          itemId: entry.itemId,
+          quantity: Number(entry.quantity || 0),
+          name: def.name || U.titleCase(entry.itemId),
+          amount: Number(def.animalFeedValue || hungerEffect?.value || (tags.includes("bait") ? 8 : 12))
+        };
+      }).filter(Boolean);
+    }).filter((entry) => entry.quantity > 0);
+  }
+
+  function chooseBestAnimalFeed() {
+    const candidates = getAnimalFeedCandidates();
+    if (!candidates.length) return null;
+    return candidates.sort((a, b) => b.amount - a.amount)[0];
+  }
+
+  function feedSpecimen(specimenId, amount = 10, options = {}) {
     const specimen = getSpecimen(specimenId);
     if (!specimen) return null;
 
-    const current = Number(specimen.needs?.hunger || 0);
-    specimen.needs.hunger = U.clamp(current + Number(amount || 0), 0, 100);
+    let feedAmount = Number(amount || 0);
+    let feedLabel = "field ration";
+
+    if (!options.free) {
+      const chosen = options.itemId
+        ? getAnimalFeedCandidates().find((entry) => entry.itemId === options.itemId)
+        : chooseBestAnimalFeed();
+
+      if (!chosen) {
+        S.addToast("No food, bait, or edible catch available for feeding.", "warning");
+        S.logActivity(`Could not feed ${specimen.name}; no suitable food was available.`, "warning");
+        return null;
+      }
+
+      S.removeItem(chosen.source, chosen.itemId, 1);
+      feedAmount = Number(options.amount || chosen.amount || feedAmount || 10);
+      feedLabel = chosen.name;
+    }
+
+    specimen.needs.hunger = U.clamp(Number(specimen.needs?.hunger || 0) + feedAmount, 0, 100);
+    specimen.needs.comfort = U.clamp(Number(specimen.needs?.comfort || 0) + 2, 0, 100);
     specimen.lastUpdatedAt = U.isoNow();
 
     S.updateBase({ specimens: getBaseSpecimens() });
-    S.logActivity(`Fed ${specimen.name}.`, "success");
+    S.logActivity(`Fed ${specimen.name} with ${feedLabel}.`, "success");
     return specimen.needs.hunger;
   }
 
@@ -566,9 +759,15 @@ window.GrabLabAnimals = (() => {
     const cleanlinessLoss = gameMinutes * 0.025;
 
     specimens.forEach((specimen) => {
-      specimen.needs.hunger = U.clamp(Number(specimen.needs?.hunger || 0) - hungerLoss, 0, 100);
-      specimen.needs.comfort = U.clamp(Number(specimen.needs?.comfort || 0) - comfortLoss, 0, 100);
-      specimen.needs.cleanliness = U.clamp(Number(specimen.needs?.cleanliness || 0) - cleanlinessLoss, 0, 100);
+      if (specimen.storage === "cryo" || isSpecimenInCryo(specimen.id)) {
+        specimen.needs.hunger = U.clamp(Number(specimen.needs?.hunger || 0), 0, 100);
+        specimen.needs.comfort = U.clamp(Math.max(Number(specimen.needs?.comfort || 0), 70), 0, 100);
+        specimen.needs.cleanliness = U.clamp(Math.max(Number(specimen.needs?.cleanliness || 0), 70), 0, 100);
+      } else {
+        specimen.needs.hunger = U.clamp(Number(specimen.needs?.hunger || 0) - hungerLoss, 0, 100);
+        specimen.needs.comfort = U.clamp(Number(specimen.needs?.comfort || 0) - comfortLoss, 0, 100);
+        specimen.needs.cleanliness = U.clamp(Number(specimen.needs?.cleanliness || 0) - cleanlinessLoss, 0, 100);
+      }
       specimen.lastUpdatedAt = U.isoNow();
     });
 
@@ -578,7 +777,10 @@ window.GrabLabAnimals = (() => {
 
   function getEligibleBreedingSpecimens() {
     return getBaseSpecimens().filter((specimen) => {
-      return Number(specimen.needs?.hunger || 0) >= 40 &&
+      return specimen.storage !== "cryo" &&
+             !isSpecimenInCryo(specimen.id) &&
+             Boolean(getSpecimenHabitat(specimen.id)) &&
+             Number(specimen.needs?.hunger || 0) >= 40 &&
              Number(specimen.needs?.comfort || 0) >= 40 &&
              Number(specimen.needs?.cleanliness || 0) >= 35;
     });
@@ -590,7 +792,6 @@ window.GrabLabAnimals = (() => {
 
     ensureAnimalBuckets();
     const cloneQueue = U.toArray(S.getBase()?.cloneQueue);
-
     const job = {
       id: U.uid("clone"),
       sourceSpecimenId: specimen.id,
@@ -602,7 +803,6 @@ window.GrabLabAnimals = (() => {
 
     cloneQueue.push(job);
     S.updateBase({ cloneQueue });
-
     S.logActivity(`Queued clone job for ${specimen.name}.`, "info");
     return job;
   }
@@ -613,10 +813,7 @@ window.GrabLabAnimals = (() => {
     const job = queue.find((entry) => entry.id === jobId);
     if (!job) return null;
 
-    const source =
-      getSpecimen(job.sourceSpecimenId) ||
-      getReleasedSpecimens().find((entry) => entry.id === job.sourceSpecimenId);
-
+    const source = getSpecimen(job.sourceSpecimenId) || getReleasedSpecimens().find((entry) => entry.id === job.sourceSpecimenId);
     if (!source) return null;
 
     const clone = createSpecimen(source.speciesId, {
@@ -631,10 +828,10 @@ window.GrabLabAnimals = (() => {
     });
 
     addSpecimenToBase(clone);
+    autoStoreCapturedSpecimen(clone.id);
 
     const nextQueue = queue.filter((entry) => entry.id !== jobId);
     S.updateBase({ cloneQueue: nextQueue });
-
     S.logActivity(`Clone completed: ${clone.name}.`, "success");
     return clone;
   }
@@ -651,7 +848,7 @@ window.GrabLabAnimals = (() => {
         habitat: "river_channel",
         habitatType: "aquarium",
         size: "small",
-        tags: ["fish", "starter", "river"],
+        tags: ["fish", "starter", "river", "aquatic"],
         traits: ["gills", "schooling"],
         colors: ["brown", "silver"],
         baseHealth: 24,
@@ -697,6 +894,26 @@ window.GrabLabAnimals = (() => {
         baseSpeed: 3,
         temperament: "calm",
         combatMoves: ["shell_bash", "snap"]
+      },
+      {
+        id: "marsy_marsupial",
+        name: "Marsy",
+        defaultNickname: "Marsy",
+        family: "marsupial",
+        habitat: "field_station_island",
+        habitatType: "general",
+        size: "small",
+        tags: ["starter", "companion", "guide"],
+        traits: ["keen_nose", "field_notebook", "weird_luck"],
+        colors: ["rust", "cream"],
+        baseHealth: 38,
+        baseStamina: 34,
+        baseAttack: 6,
+        baseDefense: 5,
+        baseSpeed: 8,
+        temperament: "helpful",
+        allowedRoles: ["scout", "support", "fighter"],
+        combatMoves: ["scratch", "encourage", "sniff_out"]
       }
     ];
 
@@ -709,24 +926,60 @@ window.GrabLabAnimals = (() => {
     if (habitats.length > 0) return false;
 
     const structures = U.toArray(S.getBase()?.structures);
-
-    const firstHabitatStructure = structures.find((entry) => {
+    const habitatStructures = structures.filter((entry) => {
       const def = S.getStructureDef(entry.structureId);
       return def?.tags?.includes?.("habitat") || def?.habitatType;
     });
 
-    if (firstHabitatStructure) {
-      try {
-        addHabitat(firstHabitatStructure.structureId, {
-          name: "Starter Habitat"
-        });
-        return true;
-      } catch {
-        return false;
+    let created = false;
+    habitatStructures.forEach((entry) => {
+      const count = Math.max(1, Number(entry.quantity || 1));
+      for (let i = 0; i < count; i += 1) {
+        try {
+          addHabitat(entry.structureId, { name: S.getStructureDef(entry.structureId)?.name || "Starter Habitat" });
+          created = true;
+        } catch {
+          // Ignore malformed starter structure records.
+        }
       }
+    });
+
+    return created;
+  }
+
+  function seedStarterCompanionIfNeeded() {
+    ensureAnimalBuckets();
+    ensurePlayerCreatureBuckets();
+
+    const party = S.getParty();
+    const existingCompanion = [...U.toArray(party?.active), ...U.toArray(party?.reserve)]
+      .find((entry) => entry.speciesId === "marsy_marsupial" || entry.sourceSpecimenId === "spec_marsy");
+
+    if (existingCompanion) return existingCompanion;
+
+    let specimen = getBaseSpecimens().find((entry) => entry.speciesId === "marsy_marsupial" || entry.id === "spec_marsy");
+    if (!specimen) {
+      specimen = captureAnimal("marsy_marsupial", {
+        id: "spec_marsy",
+        method: "starter_recruit",
+        name: "Marsy",
+        role: "scout",
+        level: 1,
+        skipAutoStorage: true,
+        notes: "Marsy joined at the Field Station Dock and seems to know more than they should."
+      });
     }
 
-    return false;
+    if (!specimen) return null;
+
+    removeSpecimenFromCryo(specimen.id);
+    removeSpecimenFromHabitat(specimen.id, null, { silent: true });
+    setSpecimenStorage(specimen.id, "party", {
+      storageTarget: "active",
+      locationLabel: "Active Party"
+    });
+
+    return addSpecimenToParty(specimen.id, { role: "scout" });
   }
 
   function bindWorldTicks() {
@@ -768,6 +1021,10 @@ window.GrabLabAnimals = (() => {
     getBaseSpecimens,
     getReleasedSpecimens,
     getHabitats,
+    getCryoFridgeEntries,
+    getCryoMeta,
+    isSpecimenInCryo,
+    getSpecimenLocationLabel,
 
     getDefaultSpecimenStats,
     createSpecimen,
@@ -792,10 +1049,17 @@ window.GrabLabAnimals = (() => {
     addHabitat,
     getHabitat,
     getHabitatCompatibility,
+    getCompatibleHabitatsForSpecimen,
+    findFirstCompatibleHabitat,
+    autoStoreCapturedSpecimen,
     assignSpecimenToHabitat,
     removeSpecimenFromHabitat,
     getSpecimenHabitat,
+    moveSpecimenToCryo,
+    removeSpecimenFromCryo,
 
+    getAnimalFeedCandidates,
+    chooseBestAnimalFeed,
     feedSpecimen,
     cleanHabitat,
     tickSpecimenNeeds,
@@ -805,7 +1069,8 @@ window.GrabLabAnimals = (() => {
     completeCloneJob,
 
     seedFallbackAnimalsIfNeeded,
-    seedStarterHabitatsIfNeeded
+    seedStarterHabitatsIfNeeded,
+    seedStarterCompanionIfNeeded
   };
 
   window.GL_ANIMALS = API;

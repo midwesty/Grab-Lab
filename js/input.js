@@ -18,6 +18,10 @@ window.GrabLabInput = (() => {
     return window.GL_PLAYER || window.GrabLabPlayer || null;
   }
 
+  function getCombatApi() {
+    return window.GL_COMBAT || window.GrabLabCombat || null;
+  }
+
   const state = {
     initialized: false,
     pointerDown: false,
@@ -108,24 +112,159 @@ window.GrabLabInput = (() => {
     };
   }
 
+  function isPoiResolved(poi) {
+    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden);
+  }
+
   function getCurrentTilePoiList() {
     const tile = S.getCurrentMapTile();
-    return U.toArray(tile?.pointsOfInterest);
+    return U.toArray(tile?.pointsOfInterest).filter((poi) => !isPoiResolved(poi));
+  }
+
+  function getPoiCanvasPosition(poi) {
+    if (!poi) return { x: 0, y: 0 };
+
+    if (poi.canvasX != null && poi.canvasY != null) {
+      return {
+        x: Number(poi.canvasX || 0),
+        y: Number(poi.canvasY || 0)
+      };
+    }
+
+    const world = S.getWorld();
+    const tileX = Number(poi.tileX ?? world.currentTileX);
+    const tileY = Number(poi.tileY ?? world.currentTileY);
+    const worldApi = getWorldApi();
+    const rect = worldApi?.getTileRect
+      ? worldApi.getTileRect(tileX, tileY)
+      : { x: 0, y: 0, size: CFG.WORLD.tileSize };
+
+    return {
+      x: Number(rect.x || 0) + Number(poi.localX ?? rect.size * 0.5),
+      y: Number(rect.y || 0) + Number(poi.localY ?? rect.size * 0.5)
+    };
   }
 
   function findPoiAtCanvasPoint(x, y) {
     const pois = getCurrentTilePoiList();
 
     for (const poi of pois) {
-      const px = Number(poi.canvasX ?? poi.x ?? poi.localX ?? 0);
-      const py = Number(poi.canvasY ?? poi.y ?? poi.localY ?? 0);
+      const pos = getPoiCanvasPosition(poi);
 
-      if (U.distance({ x, y }, { x: px, y: py }) <= state.interactionRadiusPx) {
+      if (U.distance({ x, y }, pos) <= state.interactionRadiusPx) {
         return poi;
       }
     }
 
     return null;
+  }
+
+  function isCapturableAnimalPoi(poi) {
+    return Boolean(
+      poi &&
+      (poi.type === "capturable_animal" || poi.type === "wild_animal") &&
+      poi.capturable !== false &&
+      poi.speciesId
+    );
+  }
+
+  function isHostilePoi(poi) {
+    return Boolean(
+      poi &&
+      (
+        poi.hostile ||
+        poi.encounterId ||
+        poi.combatEncounterId ||
+        poi.enemyId ||
+        poi.type === "hostile" ||
+        poi.type === "enemy" ||
+        poi.type === "hostile_npc" ||
+        poi.type === "combat" ||
+        poi.type === "fungal_enemy"
+      )
+    );
+  }
+
+  function markPoiResolved(poi, field = "resolved") {
+    if (!poi?.id) return false;
+
+    const tile = S.getMapTile(
+      poi.tileX ?? S.getWorld().currentTileX,
+      poi.tileY ?? S.getWorld().currentTileY
+    ) || S.getCurrentMapTile();
+
+    const pois = U.toArray(tile?.pointsOfInterest);
+    const target = pois.find((entry) => entry.id === poi.id);
+
+    if (!target) return false;
+
+    target[field] = true;
+    target.resolvedAt = U.isoNow();
+    U.eventBus.emit("world:poiResolved", { poi: U.deepClone(target), field });
+    return true;
+  }
+
+  function ensureGrabButton() {
+    let btn = U.byId("btnGrabAnimal");
+    if (btn) return btn;
+
+    const bar = U.byId("bottomActionBar");
+    if (!bar) return null;
+
+    btn = U.createEl("button", {
+      id: "btnGrabAnimal",
+      className: "action-btn",
+      text: "Grab"
+    });
+
+    const harvest = U.byId("btnHarvest");
+    if (harvest?.nextSibling) {
+      bar.insertBefore(btn, harvest.nextSibling);
+    } else {
+      bar.appendChild(btn);
+    }
+
+    return btn;
+  }
+
+  function updateActionButtonsForTarget(target = state.selectedWorldTarget) {
+    const grab = ensureGrabButton();
+    const interact = U.byId("btnInteract");
+    const attack = U.byId("btnAttack");
+
+    if (grab) {
+      const canGrab = isCapturableAnimalPoi(target);
+      grab.textContent = canGrab ? `Grab ${target.shortName || target.name || "Animal"}` : "Grab";
+      grab.disabled = !canGrab;
+      grab.classList.toggle("primary", canGrab);
+      grab.title = canGrab
+        ? `Capture ${target.name || "this animal"}`
+        : "Select a capturable animal first.";
+    }
+
+    if (interact) {
+      if (target?.type === "npc" && target.recruitable) {
+        interact.textContent = "Recruit";
+      } else if (isCapturableAnimalPoi(target)) {
+        interact.textContent = "Inspect";
+      } else {
+        interact.textContent = "Interact";
+      }
+    }
+
+    if (attack) {
+      attack.disabled = false;
+      attack.classList.toggle("primary", isHostilePoi(target));
+      attack.textContent = isHostilePoi(target) ? "Fight" : "Attack";
+    }
+  }
+
+  function getFirstCapturablePoiOnTile() {
+    return getCurrentTilePoiList().find(isCapturableAnimalPoi) || null;
+  }
+
+  function getFirstHostilePoiOnTile() {
+    return getCurrentTilePoiList().find(isHostilePoi) || null;
   }
 
   function showInteractionPromptFor(target) {
@@ -143,9 +282,11 @@ window.GrabLabInput = (() => {
     let promptBody = target.description || `Tap to inspect ${target.name || "this spot"}.`;
 
     if (target.type === "npc" && target.recruitable) {
-      promptBody = `${promptBody} Tap again to recruit.`;
-    } else if ((target.type === "capturable_animal" || target.type === "wild_animal") && target.capturable) {
-      promptBody = `${promptBody} Tap again to capture.`;
+      promptBody = `${promptBody} Tap again to recruit, or use Interact.`;
+    } else if (isCapturableAnimalPoi(target)) {
+      promptBody = `${promptBody} Press Grab to capture safely, or Attack to start a wildlife encounter.`;
+    } else if (isHostilePoi(target)) {
+      promptBody = `${promptBody} Tap again or press Attack to start combat.`;
     }
 
     U.setText(title, target.name || "Point of Interest");
@@ -164,6 +305,7 @@ window.GrabLabInput = (() => {
       selectedEntityId: target?.id || null
     });
     showInteractionPromptFor(target);
+    updateActionButtonsForTarget(target || null);
   }
 
   function moveToClickedTile(tileX, tileY) {
@@ -228,7 +370,9 @@ window.GrabLabInput = (() => {
         S.addToast("Marsy joined the party!", "success");
       }
 
+      markPoiResolved(poi, "recruited");
       A.playSfx("ui_confirm").catch?.(() => {});
+      setSelectedWorldTarget(null);
       UI.renderEverything();
       return true;
     }
@@ -245,7 +389,7 @@ window.GrabLabInput = (() => {
       return false;
     }
 
-    if (!poi.speciesId) {
+    if (!poi?.speciesId) {
       S.addToast("That creature has no species data.", "error");
       return false;
     }
@@ -256,6 +400,8 @@ window.GrabLabInput = (() => {
     const specimen = AN.captureAnimal(poi.speciesId, {
       method: "field_capture",
       name: baseName,
+      tileX: poi.tileX ?? S.getWorld().currentTileX,
+      tileY: poi.tileY ?? S.getWorld().currentTileY,
       notes: `Captured from ${poi.name || baseName} near ${S.getCurrentMapTile()?.name || "the current tile"}.`
     });
 
@@ -264,11 +410,60 @@ window.GrabLabInput = (() => {
       return false;
     }
 
+    markPoiResolved(poi, "captured");
     S.logActivity(`${specimen.name} was secured for transport back to base.`, "success");
-    S.logActivity("You can review captured creatures in Party/Base systems and assign them to habitats when available.", "info");
+    S.logActivity("You can review captured creatures in Party/Base systems, assign them to habitats, feed them, breed them, recruit them, or release them.", "info");
     A.playSfx("ui_confirm").catch?.(() => {});
+    setSelectedWorldTarget(null);
     UI.renderEverything();
     return true;
+  }
+
+  function startPoiCombat(poi = state.selectedWorldTarget) {
+    const COMBAT = getCombatApi();
+
+    if (!COMBAT) {
+      S.addToast("Combat system not available yet.", "error");
+      return false;
+    }
+
+    if (!poi) {
+      S.addToast("No combat target selected.", "warning");
+      return false;
+    }
+
+    if (isCapturableAnimalPoi(poi) && COMBAT.startWildlifeEncounter) {
+      COMBAT.startWildlifeEncounter(poi.speciesId, {
+        sourcePoiId: poi.id,
+        level: Number(poi.level || 1),
+        name: poi.name || null
+      });
+      S.logActivity(`You engaged ${poi.name || "wildlife"} instead of grabbing it directly.`, "warning");
+      A.playSfx("ui_confirm").catch?.(() => {});
+      UI.showScreen?.("combat");
+      return true;
+    }
+
+    const encounterId = poi.encounterId || poi.combatEncounterId || poi.enemyId || "fungal_blight";
+
+    if (COMBAT.startEncounter) {
+      COMBAT.startEncounter(encounterId, {
+        encounterType: poi.encounterType || "fungal",
+        encounterMeta: {
+          sourcePoiId: poi.id,
+          name: poi.name || encounterId,
+          tileX: poi.tileX ?? S.getWorld().currentTileX,
+          tileY: poi.tileY ?? S.getWorld().currentTileY
+        }
+      });
+      S.logActivity(`You engaged ${poi.name || U.titleCase(encounterId)}.`, "warning");
+      A.playSfx("ui_confirm").catch?.(() => {});
+      UI.showScreen?.("combat");
+      return true;
+    }
+
+    S.addToast("No combat start function found.", "error");
+    return false;
   }
 
   function inspectPointOfInterest(poi) {
@@ -281,12 +476,18 @@ window.GrabLabInput = (() => {
 
     if (sameTarget && poi.type === "npc" && poi.recruitable) {
       recruitPoiNpc(poi);
+      return;
+    }
+
+    if (sameTarget && isCapturableAnimalPoi(poi)) {
+      S.logActivity(`${poi.name || "Animal"} is close enough to grab. Use the Grab button to capture safely, or Attack to start a wildlife encounter.`, "info");
+      S.addToast(`Use Grab to capture ${poi.name || "animal"}.`, "info");
       setSelectedWorldTarget(poi);
       return;
     }
 
-    if (sameTarget && (poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
-      capturePoiAnimal(poi);
+    if (sameTarget && isHostilePoi(poi)) {
+      startPoiCombat(poi);
       setSelectedWorldTarget(poi);
       return;
     }
@@ -296,9 +497,12 @@ window.GrabLabInput = (() => {
     if (poi.type === "npc" && poi.recruitable) {
       S.logActivity(`Met ${poi.name || "a recruitable companion"}: ${detailText}`, "info");
       S.addToast(`Inspect ${poi.name || "companion"} again to recruit.`, "info");
-    } else if ((poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
+    } else if (isCapturableAnimalPoi(poi)) {
       S.logActivity(`Observed ${poi.name || "a capturable animal"}: ${detailText}`, "info");
-      S.addToast(`Inspect ${poi.name || "animal"} again to capture.`, "info");
+      S.addToast(`Use Grab to capture ${poi.name || "animal"}.`, "info");
+    } else if (isHostilePoi(poi)) {
+      S.logActivity(`Spotted threat ${poi.name || "hostile"}: ${detailText}`, "warning");
+      S.addToast(`Press Attack to fight ${poi.name || "threat"}.`, "warning");
     } else {
       S.logActivity(`Inspected ${poi.name || "point of interest"}: ${detailText}`, "info");
       S.addToast(`Inspected ${poi.name || "point of interest"}.`, "info");
@@ -313,13 +517,16 @@ window.GrabLabInput = (() => {
     const poi = findPoiAtCanvasPoint(canvasX, canvasY);
     if (poi) {
       if (poi.type === "npc" && poi.recruitable) {
-        S.logActivity(`Context hint: ${poi.name || "NPC"} can be recruited with a second tap.`, "info");
+        S.logActivity(`Context hint: ${poi.name || "NPC"} can be recruited with a second tap or Interact.`, "info");
         S.addToast(`Recruitable: ${poi.name || "NPC"}`, "info");
-      } else if ((poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
-        S.logActivity(`Context hint: ${poi.name || "Animal"} can be captured with a second tap.`, "info");
+      } else if (isCapturableAnimalPoi(poi)) {
+        S.logActivity(`Context hint: ${poi.name || "Animal"} can be captured with the Grab button.`, "info");
         S.addToast(`Capturable: ${poi.name || "Animal"}`, "info");
+      } else if (isHostilePoi(poi)) {
+        S.logActivity(`Context hint: ${poi.name || "Threat"} can be engaged with Attack.`, "warning");
+        S.addToast(`Hostile: ${poi.name || "Threat"}`, "warning");
       } else {
-        S.logActivity(`Context action opened for ${poi.name || "POI"} (placeholder).`, "info");
+        S.logActivity(`Context action opened for ${poi.name || "POI"}.`, "info");
         S.addToast(`Context action: ${poi.name || "POI"}`, "warning");
       }
       setSelectedWorldTarget(poi);
@@ -327,7 +534,7 @@ window.GrabLabInput = (() => {
     }
 
     const tile = canvasToTile(canvasX, canvasY);
-    S.logActivity(`Context action at tile ${tile.x}, ${tile.y} (placeholder).`, "info");
+    S.logActivity(`Context action at tile ${tile.x}, ${tile.y}.`, "info");
     S.addToast(`Context tile ${tile.x}, ${tile.y}`, "warning");
   }
 
@@ -483,7 +690,7 @@ window.GrabLabInput = (() => {
   }
 
   function performGatherLoot() {
-    const P = getPlayerApi();
+    const PAPI = getPlayerApi();
     const tile = S.getCurrentMapTile();
     const tableId = getLootTableForHarvestAction("gather_loot", tile);
     const table = getLootTableById(tableId) || getFallbackLootTable(tableId);
@@ -515,7 +722,7 @@ window.GrabLabInput = (() => {
     }
 
     addHarvestResultsToInventory(gains, "player");
-    P?.registerHarvestAction?.();
+    PAPI?.registerHarvestAction?.();
 
     const summary = summarizeGains(gains);
     S.logActivity(`Gathered loot near ${tile?.name || "this tile"}: ${summary}.`, "success");
@@ -526,7 +733,7 @@ window.GrabLabInput = (() => {
   }
 
   function performGatherWater() {
-    const P = getPlayerApi();
+    const PAPI = getPlayerApi();
     const world = S.getWorld();
     const tile = S.getCurrentMapTile();
     const biomeId = tile?.biomeId || world.currentBiomeId || "field_station_island";
@@ -544,7 +751,7 @@ window.GrabLabInput = (() => {
     }
 
     S.addItem("player", "fresh_water", amount);
-    P?.registerHarvestAction?.();
+    PAPI?.registerHarvestAction?.();
 
     S.logActivity(`Collected fresh water x${amount} near ${tile?.name || "this tile"}.`, "success");
     S.addToast(`Fresh water x${amount}`, "success");
@@ -584,7 +791,7 @@ window.GrabLabInput = (() => {
   }
 
   function performHarvestResources() {
-    const P = getPlayerApi();
+    const PAPI = getPlayerApi();
     const tile = S.getCurrentMapTile();
     const pool = [
       ...getDirectHarvestPool(tile),
@@ -613,7 +820,7 @@ window.GrabLabInput = (() => {
     }
 
     addHarvestResultsToInventory(gains, "player");
-    P?.registerHarvestAction?.();
+    PAPI?.registerHarvestAction?.();
 
     const summary = summarizeGains(gains);
     S.logActivity(`Harvested local materials near ${tile?.name || "this tile"}: ${summary}.`, "success");
@@ -968,6 +1175,21 @@ window.GrabLabInput = (() => {
           evt.preventDefault();
           M.toggleModal("fishingModal");
           break;
+        case "g":
+          evt.preventDefault();
+          {
+            const target = isCapturableAnimalPoi(state.selectedWorldTarget)
+              ? state.selectedWorldTarget
+              : getFirstCapturablePoiOnTile();
+
+            if (target) {
+              setSelectedWorldTarget(target);
+              capturePoiAnimal(target);
+            } else {
+              S.addToast("No capturable animal selected.", "warning");
+            }
+          }
+          break;
         case "h":
           evt.preventDefault();
           S.modifyPlayerStat("health", 5);
@@ -975,10 +1197,12 @@ window.GrabLabInput = (() => {
           break;
         case " ":
           evt.preventDefault();
-          const paused = !Boolean(S.getWorld()?.isPaused);
-          S.updateWorld({ isPaused: paused });
-          S.addToast(paused ? "Paused" : "Resumed", paused ? "warning" : "success");
-          UI.renderHud();
+          {
+            const paused = !Boolean(S.getWorld()?.isPaused);
+            S.updateWorld({ isPaused: paused });
+            S.addToast(paused ? "Paused" : "Resumed", paused ? "warning" : "success");
+            UI.renderHud();
+          }
           break;
         case "escape":
           closeHarvestMenu();
@@ -993,8 +1217,35 @@ window.GrabLabInput = (() => {
     const btnInteract = U.byId("btnInteract");
     const btnHarvest = U.byId("btnHarvest");
     const btnAttack = U.byId("btnAttack");
+    const btnGrab = ensureGrabButton();
 
     if (btnInteract) {
+      U.on(btnInteract, "click", (evt) => {
+        evt.preventDefault();
+
+        if (state.selectedWorldTarget) {
+          inspectPointOfInterest(state.selectedWorldTarget);
+          return;
+        }
+
+        const firstCapturable = getFirstCapturablePoiOnTile();
+        const firstHostile = getFirstHostilePoiOnTile();
+
+        if (firstCapturable) {
+          setSelectedWorldTarget(firstCapturable);
+          inspectPointOfInterest(firstCapturable);
+          return;
+        }
+
+        if (firstHostile) {
+          setSelectedWorldTarget(firstHostile);
+          inspectPointOfInterest(firstHostile);
+          return;
+        }
+
+        S.addToast("No nearby target selected.", "warning");
+      });
+
       U.on(btnInteract, "contextmenu", (evt) => {
         evt.preventDefault();
         if (state.selectedWorldTarget) {
@@ -1002,6 +1253,25 @@ window.GrabLabInput = (() => {
         } else {
           S.addToast("No target selected.", "warning");
         }
+      });
+    }
+
+    if (btnGrab) {
+      U.on(btnGrab, "click", (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        const target = isCapturableAnimalPoi(state.selectedWorldTarget)
+          ? state.selectedWorldTarget
+          : getFirstCapturablePoiOnTile();
+
+        if (!target) {
+          S.addToast("No capturable animal selected or visible on this tile.", "warning");
+          return;
+        }
+
+        setSelectedWorldTarget(target);
+        capturePoiAnimal(target);
       });
     }
 
@@ -1028,9 +1298,35 @@ window.GrabLabInput = (() => {
     }
 
     if (btnAttack) {
+      U.on(btnAttack, "click", (evt) => {
+        evt.preventDefault();
+
+        const target = state.selectedWorldTarget || getFirstHostilePoiOnTile();
+
+        if (target) {
+          setSelectedWorldTarget(target);
+          startPoiCombat(target);
+          return;
+        }
+
+        const COMBAT = getCombatApi();
+        if (COMBAT?.startRandomEncounter) {
+          COMBAT.startRandomEncounter();
+          S.logActivity("You kicked the nearest mushroom and picked a fight with the consequences.", "warning");
+          return;
+        }
+
+        S.addToast("No combat target available.", "warning");
+      });
+
       U.on(btnAttack, "contextmenu", (evt) => {
         evt.preventDefault();
-        S.logActivity("Secondary attack action placeholder.", "info");
+        const target = state.selectedWorldTarget || getFirstHostilePoiOnTile();
+        if (target) {
+          startPoiCombat(target);
+        } else {
+          S.logActivity("No selected combat target.", "info");
+        }
       });
     }
 
@@ -1041,6 +1337,8 @@ window.GrabLabInput = (() => {
       if (menu.contains(evt.target) || btn?.contains(evt.target)) return;
       closeHarvestMenu();
     });
+
+    updateActionButtonsForTarget(null);
   }
 
   function bindRuntimeRenders() {
@@ -1048,10 +1346,17 @@ window.GrabLabInput = (() => {
       drawMiniMap();
       clearInteractionPrompt();
       closeHarvestMenu();
+      updateActionButtonsForTarget(null);
     });
 
     U.eventBus.on("world:tileRevealed", drawMiniMap);
     U.eventBus.on("world:tileCleared", drawMiniMap);
+
+    U.eventBus.on("world:poiResolved", () => {
+      drawMiniMap();
+      updateActionButtonsForTarget(null);
+    });
+
     U.eventBus.on("screen:changed", () => {
       if (S.getCurrentScreen() === "game") {
         drawMiniMap();
@@ -1073,6 +1378,7 @@ window.GrabLabInput = (() => {
 
     drawMiniMap();
     clearInteractionPrompt();
+    updateActionButtonsForTarget(null);
 
     state.initialized = true;
     U.eventBus.emit("input:initialized");
@@ -1085,11 +1391,15 @@ window.GrabLabInput = (() => {
     screenToCanvas,
     canvasToTile,
     worldTileToCanvasCenter,
+    getPoiCanvasPosition,
     findPoiAtCanvasPoint,
     handlePrimaryWorldAction,
     handleSecondaryWorldAction,
     setSelectedWorldTarget,
     clearInteractionPrompt,
+    capturePoiAnimal,
+    recruitPoiNpc,
+    startPoiCombat,
     performHarvestAction
   };
 
