@@ -1,0 +1,59 @@
+grab-lab/
+├── index.html
+├── style.css
+├── js/
+│   ├── main.js
+│   ├── config.js
+│   ├── state.js
+│   ├── saveLoad.js
+│   ├── audio.js
+│   ├── ui.js
+│   ├── modal.js
+│   ├── input.js
+│   ├── world.js
+│   ├── map.js
+│   ├── player.js
+│   ├── animals.js
+│   ├── breeding.js
+│   ├── combat.js
+│   ├── crafting.js
+│   ├── build.js
+│   ├── inventory.js
+│   ├── fishing.js
+│   ├── tutorial.js
+│   ├── admin.js
+│   └── utils.js
+├── data/
+│   ├── config.json
+│   ├── items.json
+│   ├── animals.json
+│   ├── plants.json
+│   ├── traits.json
+│   ├── mutations.json
+│   ├── classes.json
+│   ├── skills.json
+│   ├── recipes.json
+│   ├── structures.json
+│   ├── encounters.json
+│   ├── dialogue.json
+│   ├── map.json
+│   ├── lootTables.json
+│   ├── audio.json
+│   ├── statusEffects.json
+│   ├── tutorials.json
+│   └── cheats.json
+├── assets/
+│   ├── audio/
+│   │   ├── music/
+│   │   ├── sfx/
+│   │   └── ambient/
+│   ├── img/
+│   │   ├── ui/
+│   │   ├── icons/
+│   │   ├── portraits/
+│   │   ├── animals/
+│   │   ├── tiles/
+│   │   ├── structures/
+│   │   └── fx/
+│   └── fonts/
+└── README.txt
