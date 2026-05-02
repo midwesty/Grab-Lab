@@ -16,10 +16,6 @@ window.GrabLabBreeding = (() => {
     return window.GL_ANIMALS || window.GrabLabAnimals || null;
   }
 
-  function getInventoryApi() {
-    return window.GL_INVENTORY || window.GrabLabInventory || null;
-  }
-
   function htmlEscape(value = "") {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -55,6 +51,104 @@ window.GrabLabBreeding = (() => {
   function getBreedingHistory() {
     ensureBreedingBuckets();
     return U.toArray(S.getBase()?.breedingHistory);
+  }
+
+  function getMutations() {
+    return U.toArray(S.getData()?.mutations);
+  }
+
+  function getTraits() {
+    return U.toArray(S.getData()?.traits);
+  }
+
+  function seedFallbackMutationsIfNeeded() {
+    const mutations = getMutations();
+    if (mutations.length > 0) return false;
+
+    const fallback = [
+      {
+        id: "camouflage",
+        name: "Camouflage",
+        description: "Blends into surroundings and gains stealth bonuses."
+      },
+      {
+        id: "gills",
+        name: "Gills",
+        description: "Allows better water movement and aquatic survival."
+      },
+      {
+        id: "claws",
+        name: "Claws",
+        description: "Improves physical attack capability."
+      },
+      {
+        id: "flight",
+        name: "Flight",
+        description: "Can access elevated or otherwise unreachable areas."
+      },
+      {
+        id: "thick_shell",
+        name: "Thick Shell",
+        description: "Improves defense and resilience."
+      },
+      {
+        id: "luminous",
+        name: "Luminous",
+        description: "Emits a gentle glow in dark areas."
+      },
+      {
+        id: "bright_eyes",
+        name: "Bright Eyes",
+        description: "Improves awareness, scouting, and night activity."
+      },
+      {
+        id: "odd_coloration",
+        name: "Odd Coloration",
+        description: "Unusual coloration. Maybe useful. Maybe just weird."
+      },
+      {
+        id: "hardy",
+        name: "Hardy",
+        description: "Improves general resilience and survival."
+      },
+      {
+        id: "quick_reflexes",
+        name: "Quick Reflexes",
+        description: "Improves speed and reaction time."
+      },
+      {
+        id: "spore_touched",
+        name: "Spore-Touched",
+        description: "A suspicious fungal mutation with unpredictable uses."
+      }
+    ];
+
+    S.replaceDataBucket("mutations", fallback);
+    return true;
+  }
+
+  function seedFallbackTraitsIfNeeded() {
+    const traits = getTraits();
+    if (traits.length > 0) return false;
+
+    const fallback = [
+      { id: "gills", name: "Gills" },
+      { id: "jump", name: "Jump" },
+      { id: "shell", name: "Shell" },
+      { id: "flight", name: "Flight" },
+      { id: "camouflage", name: "Camouflage" },
+      { id: "claws", name: "Claws" },
+      { id: "wet_skin", name: "Wet Skin" },
+      { id: "schooling", name: "Schooling" },
+      { id: "swim", name: "Swim" },
+      { id: "keen_nose", name: "Keen Nose" },
+      { id: "field_notebook", name: "Field Notebook" },
+      { id: "weird_luck", name: "Weird Luck" },
+      { id: "scrappy", name: "Scrappy" }
+    ];
+
+    S.replaceDataBucket("traits", fallback);
+    return true;
   }
 
   function getAnimalName(speciesId) {
@@ -827,6 +921,8 @@ window.GrabLabBreeding = (() => {
     if (state.initialized) return true;
 
     ensureBreedingBuckets();
+    seedFallbackMutationsIfNeeded();
+    seedFallbackTraitsIfNeeded();
     bindEvents();
     renderBreedingPanel();
 
@@ -841,6 +937,11 @@ window.GrabLabBreeding = (() => {
     ensureBreedingBuckets,
     getBreedingJobs,
     getBreedingHistory,
+    getMutations,
+    getTraits,
+
+    seedFallbackMutationsIfNeeded,
+    seedFallbackTraitsIfNeeded,
 
     isCrossSpeciesUnlocked,
     getEligibleBreedingSpecimens,
