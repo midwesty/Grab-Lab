@@ -95,16 +95,129 @@ window.GrabLabMain = (() => {
     return normalized;
   }
 
+  function safeCall(label, fn) {
+    try {
+      if (typeof fn === "function") {
+        return fn();
+      }
+
+      U.warn(`Skipped missing startup helper: ${label}`);
+      return false;
+    } catch (err) {
+      U.warn(`Startup helper failed: ${label}`, err);
+      S.addDataLoadError?.(`Startup helper failed: ${label}: ${err?.message || err}`);
+      return false;
+    }
+  }
+
+  function seedFallbackBreedingDataDirectlyIfNeeded() {
+    const mutations = U.toArray(S.getData()?.mutations);
+    const traits = U.toArray(S.getData()?.traits);
+
+    if (!mutations.length) {
+      S.replaceDataBucket("mutations", [
+        {
+          id: "camouflage",
+          name: "Camouflage",
+          description: "Blends into surroundings and gains stealth bonuses."
+        },
+        {
+          id: "gills",
+          name: "Gills",
+          description: "Allows better water movement and aquatic survival."
+        },
+        {
+          id: "claws",
+          name: "Claws",
+          description: "Improves physical attack capability."
+        },
+        {
+          id: "flight",
+          name: "Flight",
+          description: "Can access elevated or otherwise unreachable areas."
+        },
+        {
+          id: "thick_shell",
+          name: "Thick Shell",
+          description: "Improves defense and resilience."
+        },
+        {
+          id: "luminous",
+          name: "Luminous",
+          description: "Emits a gentle glow in dark areas."
+        },
+        {
+          id: "bright_eyes",
+          name: "Bright Eyes",
+          description: "Improves awareness, scouting, and night activity."
+        },
+        {
+          id: "odd_coloration",
+          name: "Odd Coloration",
+          description: "Unusual coloration. Maybe useful. Maybe just weird."
+        },
+        {
+          id: "hardy",
+          name: "Hardy",
+          description: "Improves general resilience and survival."
+        },
+        {
+          id: "quick_reflexes",
+          name: "Quick Reflexes",
+          description: "Improves speed and reaction time."
+        },
+        {
+          id: "spore_touched",
+          name: "Spore-Touched",
+          description: "A suspicious fungal mutation with unpredictable uses."
+        }
+      ]);
+    }
+
+    if (!traits.length) {
+      S.replaceDataBucket("traits", [
+        { id: "gills", name: "Gills" },
+        { id: "jump", name: "Jump" },
+        { id: "shell", name: "Shell" },
+        { id: "flight", name: "Flight" },
+        { id: "camouflage", name: "Camouflage" },
+        { id: "claws", name: "Claws" },
+        { id: "wet_skin", name: "Wet Skin" },
+        { id: "schooling", name: "Schooling" },
+        { id: "swim", name: "Swim" },
+        { id: "keen_nose", name: "Keen Nose" },
+        { id: "field_notebook", name: "Field Notebook" },
+        { id: "weird_luck", name: "Weird Luck" },
+        { id: "scrappy", name: "Scrappy" }
+      ]);
+    }
+
+    return true;
+  }
+
   function ensureFallbackData() {
-    INVENTORY.seedFallbackItemsIfNeeded();
-    MAP.seedFallbackMapData();
-    ANIMALS.seedFallbackAnimalsIfNeeded();
-    BREEDING.seedFallbackMutationsIfNeeded();
-    BREEDING.seedFallbackTraitsIfNeeded();
-    CRAFTING.seedFallbackRecipesIfNeeded();
-    BUILD.seedFallbackStructuresIfNeeded();
-    FISHING.seedFallbackFishingItemsIfNeeded();
-    TUTORIAL.seedFallbackTutorialsIfNeeded();
+    safeCall("INVENTORY.seedFallbackItemsIfNeeded", () => INVENTORY?.seedFallbackItemsIfNeeded?.());
+    safeCall("MAP.seedFallbackMapData", () => MAP?.seedFallbackMapData?.());
+    safeCall("ANIMALS.seedFallbackAnimalsIfNeeded", () => ANIMALS?.seedFallbackAnimalsIfNeeded?.());
+
+    const breedingMutationSeeded = safeCall(
+      "BREEDING.seedFallbackMutationsIfNeeded",
+      () => BREEDING?.seedFallbackMutationsIfNeeded?.()
+    );
+
+    const breedingTraitSeeded = safeCall(
+      "BREEDING.seedFallbackTraitsIfNeeded",
+      () => BREEDING?.seedFallbackTraitsIfNeeded?.()
+    );
+
+    if (!breedingMutationSeeded || !breedingTraitSeeded) {
+      seedFallbackBreedingDataDirectlyIfNeeded();
+    }
+
+    safeCall("CRAFTING.seedFallbackRecipesIfNeeded", () => CRAFTING?.seedFallbackRecipesIfNeeded?.());
+    safeCall("BUILD.seedFallbackStructuresIfNeeded", () => BUILD?.seedFallbackStructuresIfNeeded?.());
+    safeCall("FISHING.seedFallbackFishingItemsIfNeeded", () => FISHING?.seedFallbackFishingItemsIfNeeded?.());
+    safeCall("TUTORIAL.seedFallbackTutorialsIfNeeded", () => TUTORIAL?.seedFallbackTutorialsIfNeeded?.());
   }
 
   function seedStarterStateIfNeeded() {
@@ -228,7 +341,7 @@ window.GrabLabMain = (() => {
         FISHING.renderFishingPanel();
       }
       if (modalId === "breedingModal") {
-        BREEDING.renderBreedingPanel();
+        BREEDING?.renderBreedingPanel?.();
       }
       if (modalId === "craftModal") {
         CRAFTING.renderCraftingPanel();
@@ -308,7 +421,7 @@ window.GrabLabMain = (() => {
     MAP.init();
     PLAYER.init();
     ANIMALS.init();
-    BREEDING.init();
+    BREEDING?.init?.();
     COMBAT.init();
     CRAFTING.init();
     BUILD.init();
