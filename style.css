@@ -1749,21 +1749,20 @@ small {
 
 
 /* -------------------------------------------------------------------------- */
-/* Capture Filters / Action Menus                                             */
+/* Admin / Catalogue Utility Grids                                            */
 /* -------------------------------------------------------------------------- */
-.capture-filter-card {
-  margin-bottom: 0.7rem;
+.admin-spawn-card {
+  margin-bottom: 1rem;
 }
 
-.capture-filter-grid {
+.admin-spawn-grid {
   display: grid;
-  grid-template-columns: minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(120px, 0.8fr);
-  gap: 0.55rem;
-  margin-top: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  margin: 0.65rem 0;
 }
 
-@media (max-width: 820px) {
-  .capture-filter-grid {
-    grid-template-columns: 1fr;
-  }
+.admin-spawn-grid .form-field {
+  margin: 0;
 }

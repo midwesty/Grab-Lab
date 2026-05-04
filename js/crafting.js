@@ -377,6 +377,96 @@ window.GrabLabCrafting = (() => {
     return true;
   }
 
+
+  function refreshCraftingAfterAction() {
+    renderCraftingPanel();
+    UI.renderInventoryModal?.();
+    UI.renderBaseModal?.();
+    UI.renderEverything?.({ source: "crafting_action" });
+  }
+
+  function craftSelectedRecipeNow(recipeId = state.selectedRecipeId) {
+    const safeRecipeId = recipeId || state.selectedRecipeId;
+    if (!safeRecipeId) {
+      S.addToast("Select a recipe first.", "warning");
+      return false;
+    }
+
+    const recipe = getRecipe(safeRecipeId);
+    if (!recipe) {
+      S.addToast("Recipe not found.", "error");
+      return false;
+    }
+
+    const outputTarget = getDefaultOutputTargetForRecipe(recipe, state.selectedStationTarget);
+    const ok = craftInstant(safeRecipeId, 1, {
+      source: "all",
+      stationTarget: state.selectedStationTarget || "all",
+      preferredSources: ["player", "base", "boat"],
+      outputTarget
+    });
+
+    refreshCraftingAfterAction();
+    return ok;
+  }
+
+  function queueSelectedRecipe(recipeId = state.selectedRecipeId) {
+    const safeRecipeId = recipeId || state.selectedRecipeId;
+    if (!safeRecipeId) {
+      S.addToast("Select a recipe first.", "warning");
+      return false;
+    }
+
+    const recipe = getRecipe(safeRecipeId);
+    if (!recipe) {
+      S.addToast("Recipe not found.", "error");
+      return false;
+    }
+
+    const outputTarget = getDefaultOutputTargetForRecipe(recipe, state.selectedStationTarget);
+    createCraftingJob(safeRecipeId, 1, {
+      source: "all",
+      stationTarget: state.selectedStationTarget || "all",
+      preferredSources: ["player", "base", "boat"],
+      outputTarget
+    });
+
+    refreshCraftingAfterAction();
+    return true;
+  }
+
+  function bindCraftingActionDelegates() {
+    if (state.delegatedCraftBindings) return;
+    state.delegatedCraftBindings = true;
+
+    document.addEventListener("click", (evt) => {
+      const craftBtn = evt.target?.closest?.("#btnCraftOnce,[data-craft-now='true']");
+      const queueBtn = evt.target?.closest?.("#btnQueueCraft,[data-queue-craft='true']");
+      const btn = craftBtn || queueBtn;
+      if (!btn) return;
+
+      const craftModal = U.byId("craftModal");
+      if (craftModal && !craftModal.contains(btn)) return;
+
+      evt.preventDefault();
+      evt.stopPropagation();
+
+      const recipeId = btn.dataset.recipeId || state.selectedRecipeId;
+
+      try {
+        if (craftBtn) {
+          craftSelectedRecipeNow(recipeId);
+        } else {
+          queueSelectedRecipe(recipeId);
+        }
+      } catch (err) {
+        S.addToast(err?.message || "Crafting failed.", "error");
+        S.logActivity(`Crafting failed: ${err?.message || err}`, "error");
+        renderCraftingPanel();
+      }
+    }, true);
+  }
+
   function getCraftingJob(jobId) {
     return getCraftingQueues().find((job) => job.id === jobId) || null;
   }
@@ -671,8 +761,8 @@ window.GrabLabCrafting = (() => {
       }
 
       <div class="admin-console-actions">
-        <button id="btnCraftOnce" class="primary-btn" ${data.canCraft ? "" : "disabled"}>Craft Now</button>
-        <button id="btnQueueCraft" class="secondary-btn" ${data.canCraft ? "" : "disabled"}>Queue Timed Craft</button>
+        <button id="btnCraftOnce" class="primary-btn" data-craft-now="true" data-recipe-id="${htmlEscape(recipe.id)}" ${data.canCraft ? "" : "disabled"}>Craft Now</button>
+        <button id="btnQueueCraft" class="secondary-btn" data-queue-craft="true" data-recipe-id="${htmlEscape(recipe.id)}" ${data.canCraft ? "" : "disabled"}>Queue Timed Craft</button>
       </div>
     `;
 
@@ -682,10 +772,7 @@ window.GrabLabCrafting = (() => {
     if (btnCraftOnce) {
       U.on(btnCraftOnce, "click", () => {
         try {
-          craftInstant(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget,
-            outputTarget
-          });
+          craftSelectedRecipeNow(recipe.id);
         } catch (err) {
           S.addToast(err.message || "Craft failed.", "error");
         }
@@ -695,10 +782,7 @@ window.GrabLabCrafting = (() => {
     if (btnQueueCraft) {
       U.on(btnQueueCraft, "click", () => {
         try {
-          createCraftingJob(recipe.id, 1, {
-            stationTarget: state.selectedStationTarget,
-            outputTarget
-          });
+          queueSelectedRecipe(recipe.id);
         } catch (err) {
           S.addToast(err.message || "Queue failed.", "error");
         }
@@ -1107,6 +1191,7 @@ window.GrabLabCrafting = (() => {
     seedFallbackRecipesIfNeeded();
     ensureEssentialCraftingRecipes();
     bindTickEvents();
+    bindCraftingActionDelegates();
     renderCraftingPanel();
 
     state.initialized = true;
@@ -1145,6 +1230,8 @@ window.GrabLabCrafting = (() => {
 
     createCraftingJob,
     craftInstant,
+    craftSelectedRecipeNow,
+    queueSelectedRecipe,
     getCraftingJob,
     updateCraftingJob,
     cancelCraftingJob,

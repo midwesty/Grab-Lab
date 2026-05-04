@@ -18,6 +18,136 @@ window.GrabLabAdmin = (() => {
     initialized: false
   };
 
+  function htmlEscape(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+
+  function getItemSpawnOptions() {
+    return U.toArray(S.getData()?.items)
+      .filter((item) => item?.id)
+      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+  }
+
+  function renderItemSpawner() {
+    const modal = U.byId("adminModal");
+    const mainPanel = modal?.querySelector?.("main.detail-panel");
+    if (!modal || !mainPanel) return;
+
+    let host = U.byId("adminItemSpawner");
+    if (!host) {
+      host = U.createEl("section", {
+        id: "adminItemSpawner",
+        className: "card admin-spawn-card"
+      });
+      const consoleTitle = mainPanel.querySelector("h3");
+      if (consoleTitle) {
+        mainPanel.insertBefore(host, consoleTitle);
+      } else {
+        mainPanel.prepend(host);
+      }
+    }
+
+    const items = getItemSpawnOptions();
+    const currentSearch = U.byId("adminSpawnItemSearch")?.value || "";
+    const currentTarget = U.byId("adminSpawnItemTarget")?.value || "player";
+    const currentQty = U.byId("adminSpawnItemQty")?.value || "1";
+    const needle = currentSearch.trim().toLowerCase();
+    const filtered = items.filter((item) => {
+      if (!needle) return true;
+      return [item.id, item.name, item.description, U.toArray(item.tags).join(" ")]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    }).slice(0, 120);
+
+    host.innerHTML = `
+      <h3>Spawn Item</h3>
+      <p class="meta-sub">Search or pick any loaded item, choose target storage, then spawn it for testing.</p>
+      <div class="admin-spawn-grid">
+        <label class="form-field">
+          <span>Search item</span>
+          <input id="adminSpawnItemSearch" type="text" list="adminSpawnItemDatalist" value="${htmlEscape(currentSearch)}" placeholder="type item name or id..." />
+          <datalist id="adminSpawnItemDatalist">
+            ${items.map((item) => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name || item.id)}</option>`).join("")}
+          </datalist>
+        </label>
+        <label class="form-field">
+          <span>Item dropdown</span>
+          <select id="adminSpawnItemSelect">
+            ${filtered.map((item) => `<option value="${htmlEscape(item.id)}">${htmlEscape(item.name || item.id)} — ${htmlEscape(item.id)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Qty</span>
+          <input id="adminSpawnItemQty" type="number" min="1" value="${htmlEscape(currentQty)}" />
+        </label>
+        <label class="form-field">
+          <span>Target</span>
+          <select id="adminSpawnItemTarget">
+            <option value="player" ${currentTarget === "player" ? "selected" : ""}>Backpack</option>
+            <option value="base" ${currentTarget === "base" ? "selected" : ""}>Base Storage</option>
+            <option value="boat" ${currentTarget === "boat" ? "selected" : ""}>Boat Storage</option>
+          </select>
+        </label>
+      </div>
+      <div class="admin-console-actions">
+        <button id="btnAdminSpawnSelectedItem" class="primary-btn">Spawn Selected Item</button>
+        <button id="btnAdminSpawnCommonMaterials" class="secondary-btn">Spawn Common Materials</button>
+      </div>
+    `;
+
+    const search = U.byId("adminSpawnItemSearch");
+    const select = U.byId("adminSpawnItemSelect");
+    const qty = U.byId("adminSpawnItemQty");
+    const target = U.byId("adminSpawnItemTarget");
+    const spawnBtn = U.byId("btnAdminSpawnSelectedItem");
+    const commonBtn = U.byId("btnAdminSpawnCommonMaterials");
+
+    if (search) {
+      U.on(search, "input", U.debounce(() => renderItemSpawner(), 120));
+      U.on(search, "change", () => {
+        if (select && S.getItemDef?.(search.value)) select.value = search.value;
+      });
+    }
+
+    if (select) {
+      U.on(select, "change", () => {
+        if (search) search.value = select.value;
+      });
+      if (search && S.getItemDef?.(search.value)) select.value = search.value;
+    }
+
+    if (spawnBtn) {
+      U.on(spawnBtn, "click", () => {
+        try {
+          const itemId = (select?.value || search?.value || "").trim();
+          spawnItem(itemId, Number(qty?.value || 1), target?.value || "player");
+          renderItemSpawner();
+        } catch (err) {
+          S.addToast(err?.message || "Could not spawn item.", "error");
+          logAdmin(err?.message || String(err), "error");
+        }
+      });
+    }
+
+    if (commonBtn) {
+      U.on(commonBtn, "click", () => {
+        try {
+          [["berries_wild", 10], ["fresh_water", 10], ["fiber_bundle", 20], ["scrap_wood", 20], ["rope_bundle", 6], ["bait_worm", 10]].forEach(([id, count]) => spawnItem(id, count, "player"));
+          renderItemSpawner();
+        } catch (err) {
+          S.addToast(err?.message || "Could not spawn materials.", "error");
+        }
+      });
+    }
+  }
+
   function logAdmin(message, type = "info") {
     S.logActivity(`[ADMIN] ${message}`, type);
     const text = `${type.toUpperCase()}: ${message}`;
@@ -679,6 +809,7 @@ window.GrabLabAdmin = (() => {
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "adminModal") {
         renderAdminLog();
+        renderItemSpawner();
       }
     });
   }
@@ -690,6 +821,7 @@ window.GrabLabAdmin = (() => {
     bindConsole();
     bindModalEvents();
     renderAdminLog();
+    renderItemSpawner();
 
     state.initialized = true;
     U.eventBus.emit("admin:initialized");
@@ -699,6 +831,7 @@ window.GrabLabAdmin = (() => {
   const API = {
     init,
     renderAdminLog,
+    renderItemSpawner,
     logAdmin,
     runCommand,
 

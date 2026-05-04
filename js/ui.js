@@ -9,9 +9,6 @@ window.GrabLabUI = (() => {
   const state = {
     initialized: false,
     partyModalMode: "active", // active | reserve | captures | habitats
-    partyCaptureFilter: "all",
-    partyCaptureSort: "newest",
-    partyCaptureSearch: "",
     baseModalMode: "overview", // overview | storage
     toastTimers: new Map(),
     rightPanelCollapsed: {
@@ -681,47 +678,7 @@ window.GrabLabUI = (() => {
       }));
     }
 
-    let captures = specimens.filter((spec) => {
-      const filter = state.partyCaptureFilter || "all";
-      const location = getSpecimenLocationLabel(spec).toLowerCase();
-      const species = String(spec.speciesId || "").toLowerCase();
-      const family = String(spec.family || "").toLowerCase();
-      const search = String(state.partyCaptureSearch || "").trim().toLowerCase();
-
-      if (filter === "cryo" && !(spec.storage === "cryo" || location.includes("cryo"))) return false;
-      if (filter === "reserve" && !(spec.storage === "reserve" || location.includes("reserve"))) return false;
-      if (filter === "habitat" && !spec.habitatId) return false;
-      if (filter === "bred" && !(spec.method === "breeding" || spec.bred || Number(spec.genetics?.generation || 1) > 1)) return false;
-      if (filter === "grabbed" && !(spec.method === "field_capture" || spec.method === "grab" || spec.capturedAt)) return false;
-      if (!["all", "cryo", "reserve", "habitat", "bred", "grabbed"].includes(filter)) {
-        if (species !== filter && family !== filter) return false;
-      }
-
-      if (search) {
-        const haystack = [spec.name, spec.nickname, spec.speciesId, spec.family, location, U.toArray(spec.traits).join(" "), U.toArray(spec.mutations).join(" ")].join(" ").toLowerCase();
-        if (!haystack.includes(search)) return false;
-      }
-
-      return true;
-    });
-
-    switch (state.partyCaptureSort || "newest") {
-      case "name":
-        captures = captures.sort((a, b) => String(getSpecimenDisplayName(a)).localeCompare(String(getSpecimenDisplayName(b))));
-        break;
-      case "species":
-        captures = captures.sort((a, b) => String(a.speciesId || "").localeCompare(String(b.speciesId || "")));
-        break;
-      case "oldest":
-        captures = captures.sort((a, b) => String(a.capturedAt || "").localeCompare(String(b.capturedAt || "")));
-        break;
-      case "newest":
-      default:
-        captures = captures.sort((a, b) => String(b.capturedAt || "").localeCompare(String(a.capturedAt || "")));
-        break;
-    }
-
-    return captures.map((spec) => ({
+    return specimens.map((spec) => ({
       id: spec.id,
       name: getSpecimenDisplayName(spec),
       subtitle: `${U.titleCase(spec.speciesId || "creature")} • ${getSpecimenLocationLabel(spec)} • Lv ${spec.level || 1}`,
@@ -828,23 +785,6 @@ window.GrabLabUI = (() => {
       }
     });
 
-    const water = U.createEl("button", {
-      className: "ghost-btn",
-      text: "Water"
-    });
-
-    U.on(water, "click", () => {
-      try {
-        const ok = animals.waterSpecimen?.(specimen.id);
-        if (ok != null) {
-          S.addToast(`${getSpecimenDisplayName(specimen)} was watered.`, "success");
-          renderEverything();
-        }
-      } catch (err) {
-        S.addToast(err.message || "Could not water specimen.", "error");
-      }
-    });
-
     const release = U.createEl("button", {
       className: "ghost-btn",
       text: "Release"
@@ -873,7 +813,7 @@ window.GrabLabUI = (() => {
       getBreedingApi()?.renderBreedingPanel?.();
     });
 
-    actions.append(addParty, reserve, cryo, feed, water, release, breed);
+    actions.append(addParty, reserve, cryo, feed, release, breed);
     host.appendChild(actions);
   }
 
@@ -949,10 +889,35 @@ window.GrabLabUI = (() => {
     host.appendChild(actions);
   }
 
+  function getFreshHabitatById(habitatId, preferredTarget = "all") {
+    const animals = getAnimalsApi();
+    if (animals?.getHabitat) return animals.getHabitat(habitatId, preferredTarget) || animals.getHabitat(habitatId, "all");
+
+    const baseHabitats = U.toArray(S.getBase()?.habitats).map((h) => ({ ...h, hostTarget: "base" }));
+    const boatHabitats = U.toArray(S.getBoat()?.habitats).map((h) => ({ ...h, hostTarget: "boat" }));
+    return [...baseHabitats, ...boatHabitats].find((h) => h.id === habitatId) || null;
+  }
+
+  function rerenderHabitatManagement(habitatId, preferredTarget = "all") {
+    state.partyModalMode = "habitats";
+    renderPartyModal();
+    const fresh = getFreshHabitatById(habitatId, preferredTarget);
+    if (fresh) {
+      renderPartyDetail({
+        id: fresh.id,
+        name: fresh.name || U.titleCase(fresh.structureId || "Habitat"),
+        subtitle: `${U.titleCase(fresh.hostTarget || "base")} • ${U.titleCase(fresh.habitatType || "general")} • ${U.toArray(fresh.occupants).length}/${fresh.capacity || 2}`,
+        data: fresh,
+        type: "habitat"
+      });
+    }
+  }
+
   function renderHabitatDetailActions(host, habitat) {
     const animals = getAnimalsApi();
     if (!host || !habitat || !animals) return;
 
+    habitat = getFreshHabitatById(habitat.id, habitat.hostTarget || "all") || habitat;
     const occupantIds = U.toArray(habitat.occupants);
     const specimens = U.toArray(S.getBase()?.specimens);
     const occupants = occupantIds
@@ -1014,7 +979,7 @@ window.GrabLabUI = (() => {
       U.on(btn, "click", () => {
         try {
           const ok = animals.feedSpecimen?.(btn.dataset.specimenId);
-          if (ok) renderEverything();
+          if (ok) rerenderHabitatManagement(habitat.id, habitat.hostTarget || "all");
         } catch (err) {
           S.addToast(err.message || "Could not feed.", "error");
         }
@@ -1025,7 +990,7 @@ window.GrabLabUI = (() => {
       U.on(btn, "click", () => {
         try {
           const ok = animals.addSpecimenToParty?.(btn.dataset.specimenId);
-          if (ok) renderEverything();
+          if (ok) rerenderHabitatManagement(habitat.id, habitat.hostTarget || "all");
         } catch (err) {
           S.addToast(err.message || "Could not add to party.", "error");
         }
@@ -1036,7 +1001,7 @@ window.GrabLabUI = (() => {
       U.on(btn, "click", () => {
         try {
           const ok = animals.moveSpecimenToCryo?.(btn.dataset.specimenId);
-          if (ok) renderEverything();
+          if (ok) rerenderHabitatManagement(habitat.id, habitat.hostTarget || "all");
         } catch (err) {
           S.addToast(err.message || "Could not move to cryo.", "error");
         }
@@ -1060,7 +1025,7 @@ window.GrabLabUI = (() => {
           const ok = animals.assignSpecimenToHabitat?.(assignSelect.value, habitat.id, habitat.hostTarget || "base");
           if (ok) {
             S.addToast("Assigned to habitat.", "success");
-            renderEverything();
+            rerenderHabitatManagement(habitat.id, habitat.hostTarget || "all");
           }
         } catch (err) {
           S.addToast(err.message || "Could not assign to habitat.", "error");
@@ -1096,6 +1061,14 @@ window.GrabLabUI = (() => {
     }
 
     if (entry.type === "habitat") {
+      const freshHabitat = getFreshHabitatById(d.id || entry.id, d.hostTarget || "all") || d;
+      entry = {
+        ...entry,
+        name: freshHabitat.name || entry.name,
+        subtitle: `${U.titleCase(freshHabitat.hostTarget || "base")} • ${U.titleCase(freshHabitat.habitatType || "general")} • ${U.toArray(freshHabitat.occupants).length}/${freshHabitat.capacity || 2}`,
+        data: freshHabitat
+      };
+      const d = freshHabitat;
       const occupants = U.toArray(d.occupants);
       detail.innerHTML = `
         <h3>${htmlEscape(entry.name)}</h3>
@@ -1121,7 +1094,6 @@ window.GrabLabUI = (() => {
         <p><strong>Habitat Type:</strong> ${htmlEscape(U.titleCase(d.habitatType || "general"))}</p>
         <p><strong>Health:</strong> ${htmlEscape(String(d?.stats?.health ?? 0))}/${htmlEscape(String(d?.stats?.maxHealth ?? 0))}</p>
         <p><strong>Hunger:</strong> ${htmlEscape(String(Math.round(needs.hunger ?? 0)))}</p>
-        <p><strong>Thirst:</strong> ${htmlEscape(String(Math.round(needs.thirst ?? 100)))}</p>
         <p><strong>Comfort:</strong> ${htmlEscape(String(Math.round(needs.comfort ?? 0)))}</p>
         <p><strong>Cleanliness:</strong> ${htmlEscape(String(Math.round(needs.cleanliness ?? 0)))}</p>
         <p><strong>Traits:</strong> ${htmlEscape(U.toArray(d?.traits).join(", ") || "None")}</p>
@@ -1152,53 +1124,6 @@ window.GrabLabUI = (() => {
 
     renderPartyModeButtons();
     U.emptyEl(list);
-
-    if (state.partyModalMode === "captures") {
-      const toolbar = U.createEl("div", { className: "card capture-filter-card" });
-      const speciesOptions = U.uniqueBy(U.toArray(S.getBase()?.specimens).map((spec) => spec.family || spec.speciesId).filter(Boolean), (x) => String(x));
-      toolbar.innerHTML = `
-        <div class="meta-title">Capture Filters</div>
-        <div class="capture-filter-grid">
-          <input id="partyCaptureSearch" type="text" placeholder="Search captures..." value="${htmlEscape(state.partyCaptureSearch || "")}" />
-          <select id="partyCaptureFilter">
-            <option value="all">All Captures</option>
-            <option value="cryo">In Cryo</option>
-            <option value="reserve">In Reserve</option>
-            <option value="habitat">In Habitats</option>
-            <option value="bred">Bred</option>
-            <option value="grabbed">Grabbed/Captured</option>
-            ${speciesOptions.map((option) => `<option value="${htmlEscape(String(option).toLowerCase())}">${htmlEscape(U.titleCase(option))}</option>`).join("")}
-          </select>
-          <select id="partyCaptureSort">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="name">Name</option>
-            <option value="species">Animal Type</option>
-          </select>
-        </div>
-        <div class="admin-console-actions" style="margin-top:.6rem;">
-          <button id="btnFeedWaterAllCaptures" class="secondary-btn">Feed & Water All</button>
-          <button id="btnCleanAllCaptures" class="ghost-btn">Clean All</button>
-          <button id="btnComfortAllCaptures" class="ghost-btn">Comfort All</button>
-        </div>
-      `;
-      list.appendChild(toolbar);
-
-      const filterEl = toolbar.querySelector("#partyCaptureFilter");
-      const sortEl = toolbar.querySelector("#partyCaptureSort");
-      const searchEl = toolbar.querySelector("#partyCaptureSearch");
-      if (filterEl) filterEl.value = state.partyCaptureFilter || "all";
-      if (sortEl) sortEl.value = state.partyCaptureSort || "newest";
-
-      U.on(filterEl, "change", () => { state.partyCaptureFilter = filterEl.value || "all"; renderPartyModal(); });
-      U.on(sortEl, "change", () => { state.partyCaptureSort = sortEl.value || "newest"; renderPartyModal(); });
-      U.on(searchEl, "input", U.debounce(() => { state.partyCaptureSearch = searchEl.value || ""; renderPartyModal(); }, 140));
-
-      const animals = getAnimalsApi();
-      U.on(toolbar.querySelector("#btnFeedWaterAllCaptures"), "click", () => { animals?.feedAndWaterAll?.(); renderEverything(); });
-      U.on(toolbar.querySelector("#btnCleanAllCaptures"), "click", () => { animals?.cleanAll?.(); renderEverything(); });
-      U.on(toolbar.querySelector("#btnComfortAllCaptures"), "click", () => { animals?.comfortAll?.(); renderEverything(); });
-    }
 
     const entries = getPartyEntriesForMode();
 
@@ -1463,12 +1388,112 @@ window.GrabLabUI = (() => {
     });
   }
 
+  function getPlayerCatalogueEntries() {
+    const player = S.getPlayer();
+    const catalogue = player?.catalogue || {};
+    const entries = [];
+
+    const buckets = [
+      ["animals", U.toArray(catalogue.animals)],
+      ["plants", U.toArray(catalogue.plants)],
+      ["resources", U.toArray(catalogue.resources)],
+      ["poi", U.toArray(catalogue.poi)],
+      ["loot", U.toArray(catalogue.loot)]
+    ];
+
+    buckets.forEach(([type, list]) => {
+      list.forEach((entry) => entries.push({ type, ...entry }));
+    });
+
+    return entries.sort((a, b) => String(b.studiedAt || "").localeCompare(String(a.studiedAt || "")));
+  }
+
   function renderDnaModal() {
     const list = el("dnaList");
     const detail = el("dnaDetail");
     if (!list || !detail) return;
 
     U.emptyEl(list);
+
+    const header = U.createEl("div", { className: "admin-console-actions", style: { marginBottom: "0.75rem" } });
+    const dnaBtn = U.createEl("button", {
+      className: state.dnaModalMode === "dna" ? "primary-btn" : "secondary-btn",
+      text: "DNA Registry"
+    });
+    const catBtn = U.createEl("button", {
+      className: state.dnaModalMode === "catalogue" ? "primary-btn" : "secondary-btn",
+      text: "Study Catalogue"
+    });
+    U.on(dnaBtn, "click", () => { state.dnaModalMode = "dna"; renderDnaModal(); });
+    U.on(catBtn, "click", () => { state.dnaModalMode = "catalogue"; renderDnaModal(); });
+    header.append(dnaBtn, catBtn);
+    list.appendChild(header);
+
+    if (state.dnaModalMode === "catalogue") {
+      const controls = U.createEl("div", { className: "admin-spawn-grid", style: { marginBottom: "0.75rem" } });
+      controls.innerHTML = `
+        <label class="form-field">
+          <span>Search studied entries</span>
+          <input id="dnaCatalogueSearch" type="text" value="${htmlEscape(state.dnaCatalogueSearch)}" placeholder="name, type, traits, notes..." />
+        </label>
+        <label class="form-field">
+          <span>Type</span>
+          <select id="dnaCatalogueFilter">
+            ${["all", "animals", "plants", "resources", "loot", "poi"].map((type) => `<option value="${type}" ${state.dnaCatalogueFilter === type ? "selected" : ""}>${htmlEscape(U.titleCase(type))}</option>`).join("")}
+          </select>
+        </label>
+      `;
+      list.appendChild(controls);
+
+      const search = controls.querySelector("#dnaCatalogueSearch");
+      const filter = controls.querySelector("#dnaCatalogueFilter");
+      U.on(search, "input", U.debounce(() => {
+        state.dnaCatalogueSearch = search.value || "";
+        renderDnaModal();
+      }, 100));
+      U.on(filter, "change", () => {
+        state.dnaCatalogueFilter = filter.value || "all";
+        renderDnaModal();
+      });
+
+      const needle = String(state.dnaCatalogueSearch || "").trim().toLowerCase();
+      const entries = getPlayerCatalogueEntries().filter((entry) => {
+        if (state.dnaCatalogueFilter !== "all" && entry.type !== state.dnaCatalogueFilter) return false;
+        if (!needle) return true;
+        return [entry.id, entry.name, entry.type, entry.category, entry.family, entry.description, entry.notes, U.toArray(entry.traits).join(" ")]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
+      });
+
+      if (!entries.length) {
+        list.appendChild(U.createEl("div", { className: "card", text: "No studied catalogue entries match this view yet." }));
+        detail.textContent = "Use Interact > Study on animals, plants, caches, and POIs to build this catalogue.";
+        return;
+      }
+
+      entries.forEach((entry) => {
+        const card = U.createEl("div", { className: "card" });
+        card.innerHTML = `
+          <div class="meta-title">${htmlEscape(entry.name || U.titleCase(entry.id || "Entry"))}</div>
+          <div class="meta-sub">${htmlEscape(U.titleCase(entry.type || "entry"))}${entry.category ? ` • ${htmlEscape(U.titleCase(entry.category))}` : ""}</div>
+          <div class="meta-sub">Studied ${htmlEscape(entry.studiedAt ? new Date(entry.studiedAt).toLocaleString() : "recently")}</div>
+        `;
+        U.on(card, "click", () => {
+          detail.innerHTML = `
+            <h3>${htmlEscape(entry.name || U.titleCase(entry.id || "Catalogue Entry"))}</h3>
+            <p><strong>Type:</strong> ${htmlEscape(U.titleCase(entry.type || "entry"))}</p>
+            <p><strong>ID:</strong> ${htmlEscape(entry.id || "unknown")}</p>
+            <p><strong>Category:</strong> ${htmlEscape(U.titleCase(entry.category || entry.family || "Unknown"))}</p>
+            <p>${htmlEscape(entry.description || entry.notes || "No notes recorded.")}</p>
+            <p><strong>Traits:</strong> ${htmlEscape(U.toArray(entry.traits).join(", ") || "None recorded")}</p>
+            <p><strong>Times studied:</strong> ${htmlEscape(String(entry.studyCount || 1))}</p>
+          `;
+        });
+        list.appendChild(card);
+      });
+      return;
+    }
 
     const player = S.getPlayer();
     const dnaRegistry = U.toArray(player?.dnaRegistry);
@@ -1483,7 +1508,7 @@ window.GrabLabUI = (() => {
         className: "card",
         text: "No DNA entries recorded yet."
       }));
-      detail.textContent = "Capture and log animals to populate the DNA database.";
+      detail.textContent = "Capture and log animals to populate the DNA database. Study plants, caches, and POIs to populate the Study Catalogue tab.";
       return;
     }
 
@@ -1544,12 +1569,49 @@ window.GrabLabUI = (() => {
     if (!host) return;
 
     const quests = S.getQuests();
-    host.innerHTML = `
-      <h3>Journal</h3>
-      <p><strong>Active Quests:</strong> ${htmlEscape(String(U.toArray(quests?.active).length))}</p>
-      <p><strong>Completed Quests:</strong> ${htmlEscape(String(U.toArray(quests?.completed).length))}</p>
-      <p><strong>Notes:</strong> ${htmlEscape(String(U.toArray(quests?.journalNotes).length))}</p>
+    const active = U.toArray(quests?.active);
+    const completed = U.toArray(quests?.completed);
+    const notes = U.toArray(quests?.journalNotes || quests?.notes);
+    const codex = [
+      ...U.toArray(S.getData()?.tutorials).map((entry) => ({ type: "tutorial", ...entry })),
+      ...U.toArray(S.getData()?.dialogue).map((entry) => ({ type: "dialog", ...entry }))
+    ];
+
+    function questTitle(id) {
+      const def = S.getDataEntry?.("dialogue", id) || U.toArray(S.getData()?.dialogue).find((d) => d.id === id);
+      return def?.title || def?.name || U.titleCase(id || "Quest");
+    }
+
+    const tabHeader = `
+      <div class="admin-console-actions" style="margin-bottom:.75rem;">
+        <button id="btnJournalInnerQuests" class="${state.journalModalMode === "quests" ? "primary-btn" : "secondary-btn"}">Quests</button>
+        <button id="btnJournalInnerNotes" class="${state.journalModalMode === "notes" ? "primary-btn" : "secondary-btn"}">Notes</button>
+        <button id="btnJournalInnerCodex" class="${state.journalModalMode === "codex" ? "primary-btn" : "secondary-btn"}">Codex</button>
+      </div>
     `;
+
+    if (state.journalModalMode === "notes") {
+      host.innerHTML = `${tabHeader}<h3>Field Notes</h3>${notes.length ? notes.map((note) => `<div class="card"><div class="meta-title">${htmlEscape(note.title || note.id || "Note")}</div><p>${htmlEscape(note.body || note.text || String(note))}</p></div>`).join("") : "<p>No notes recorded yet.</p>"}`;
+    } else if (state.journalModalMode === "codex") {
+      host.innerHTML = `${tabHeader}<h3>Codex</h3>${codex.length ? codex.map((entry) => `<div class="card"><div class="meta-title">${htmlEscape(entry.title || entry.name || entry.id || "Codex Entry")}</div><div class="meta-sub">${htmlEscape(U.titleCase(entry.type || "entry"))}</div><p>${htmlEscape(entry.body || entry.summary || entry.description || "No description.")}</p></div>`).join("") : "<p>No codex entries loaded.</p>"}`;
+    } else {
+      host.innerHTML = `${tabHeader}
+        <h3>Quests</h3>
+        <p><strong>Active Quests:</strong> ${htmlEscape(String(active.length))}</p>
+        ${active.length ? active.map((id) => `<div class="card"><div class="meta-title">${htmlEscape(questTitle(id))}</div><div class="meta-sub">Active</div></div>`).join("") : "<p>No active quests.</p>"}
+        <p><strong>Completed Quests:</strong> ${htmlEscape(String(completed.length))}</p>
+        ${completed.length ? completed.map((id) => `<div class="card"><div class="meta-title">${htmlEscape(questTitle(id))}</div><div class="meta-sub">Completed</div></div>`).join("") : ""}
+      `;
+    }
+
+    [["btnJournalInnerQuests", "quests"], ["btnJournalInnerNotes", "notes"], ["btnJournalInnerCodex", "codex"]].forEach(([id, mode]) => {
+      const btn = el(id);
+      if (!btn) return;
+      U.on(btn, "click", () => {
+        state.journalModalMode = mode;
+        renderJournalModal();
+      });
+    });
   }
 
   function renderTutorialModal() {
@@ -1589,6 +1651,7 @@ window.GrabLabUI = (() => {
   }
 
   function renderAdminModal() {
+    window.GL_ADMIN?.renderItemSpawner?.();
     const host = el("adminLog");
     if (!host) return;
 
@@ -2383,6 +2446,43 @@ window.GrabLabUI = (() => {
     }
   }
 
+
+  function bindModalSubmenuButtons() {
+    [["btnJournalTabQuests", "quests"], ["btnJournalTabNotes", "notes"], ["btnJournalTabCodex", "codex"]].forEach(([id, mode]) => {
+      const btn = el(id);
+      if (!btn || btn.dataset.journalTabBound === "true") return;
+      btn.dataset.journalTabBound = "true";
+      U.on(btn, "click", () => {
+        state.journalModalMode = mode;
+        renderJournalModal();
+      });
+    });
+
+    const mutBtn = el("btnOpenMutationGuide");
+    if (mutBtn && mutBtn.dataset.mutationGuideBound !== "true") {
+      mutBtn.dataset.mutationGuideBound = "true";
+      U.on(mutBtn, "click", () => {
+        if (getBreedingApi()?.renderMutationGuide) {
+          getBreedingApi().renderMutationGuide();
+        } else {
+          const host = el("breedingResultPanel");
+          if (host) {
+            const traits = U.toArray(S.getData()?.traits);
+            const mutations = U.toArray(S.getData()?.mutations);
+            host.innerHTML = `
+              <h3>Mutation Guide</h3>
+              <p>Traits and mutations can carry through ancestry and random assortment during breeding.</p>
+              <h4>Traits</h4>
+              ${traits.map((t) => `<div class="card compact-card"><strong>${htmlEscape(t.name || t.id)}</strong><br>${htmlEscape(t.description || "")}</div>`).join("")}
+              <h4>Mutations</h4>
+              ${mutations.map((m) => `<div class="card compact-card"><strong>${htmlEscape(m.name || m.id)}</strong><br>${htmlEscape(m.description || "")}</div>`).join("")}
+            `;
+          }
+        }
+      });
+    }
+  }
+
   function bindSearchInputs() {
     const dnaSearch = el("dnaSearch");
 
@@ -2565,6 +2665,7 @@ window.GrabLabUI = (() => {
     bindSaveControls();
     bindMiniMapControls();
     bindQuickPanelButtons();
+    bindModalSubmenuButtons();
     bindActionButtons();
     bindSearchInputs();
     bindCreatorInputs();

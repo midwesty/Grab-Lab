@@ -796,6 +796,35 @@ window.GrabLabBreeding = (() => {
     }
   }
 
+
+  function renderMutationGuide() {
+    const host = U.byId("breedingResultPanel");
+    if (!host) return false;
+
+    const traits = U.toArray(S.getData()?.traits);
+    const mutations = U.toArray(S.getData()?.mutations);
+    host.innerHTML = `
+      <h3>Mutation Guide</h3>
+      <p>Cross-species breeding unlocks at level 3. Offspring inherit a random blend of parent traits, recessive traits, ancestry, and possible mutations.</p>
+      <h4>Known Traits</h4>
+      ${traits.length ? traits.map((trait) => `<div class="card compact-card"><div class="meta-title">${htmlEscape(trait.name || trait.id)}</div><div class="meta-sub">${htmlEscape(trait.id || "")}</div><p>${htmlEscape(trait.description || "")}</p></div>`).join("") : "<p>No traits loaded.</p>"}
+      <h4>Known Mutations</h4>
+      ${mutations.length ? mutations.map((mutation) => `<div class="card compact-card"><div class="meta-title">${htmlEscape(mutation.name || mutation.id)}</div><div class="meta-sub">${htmlEscape(mutation.id || "")}</div><p>${htmlEscape(mutation.description || "")}</p></div>`).join("") : "<p>No mutations loaded.</p>"}
+      <div class="admin-console-actions"><button id="btnBackToBreedingPanel" class="secondary-btn">Back to Breeding</button></div>
+    `;
+
+    const back = U.byId("btnBackToBreedingPanel");
+    if (back) U.on(back, "click", () => renderBreedingPanel());
+    return true;
+  }
+
+  function bindMutationGuideButton() {
+    const btn = U.byId("btnOpenMutationGuide");
+    if (!btn || btn.dataset.breedingGuideBound === "true") return;
+    btn.dataset.breedingGuideBound = "true";
+    U.on(btn, "click", () => renderMutationGuide());
+  }
+
   function renderBreedingPanel() {
     renderParentList("breedingParentA", state.selectedParentA, setParentA);
 
@@ -809,6 +838,7 @@ window.GrabLabBreeding = (() => {
   function bindEvents() {
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "breedingModal") {
+        bindMutationGuideButton();
         renderBreedingPanel();
       }
     });
@@ -841,6 +871,7 @@ window.GrabLabBreeding = (() => {
 
     ensureBreedingBuckets();
     bindEvents();
+    bindMutationGuideButton();
     renderBreedingPanel();
 
     state.initialized = true;
@@ -875,7 +906,8 @@ window.GrabLabBreeding = (() => {
     cancelBreedingJob,
     tickBreedingJobs,
 
-    renderBreedingPanel
+    renderBreedingPanel,
+    renderMutationGuide
   };
 
   window.GL_BREEDING = API;
