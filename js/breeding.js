@@ -16,6 +16,10 @@ window.GrabLabBreeding = (() => {
     return window.GL_ANIMALS || window.GrabLabAnimals || null;
   }
 
+  function getInventoryApi() {
+    return window.GL_INVENTORY || window.GrabLabInventory || null;
+  }
+
   function htmlEscape(value = "") {
     return String(value)
       .replaceAll("&", "&amp;")
@@ -51,104 +55,6 @@ window.GrabLabBreeding = (() => {
   function getBreedingHistory() {
     ensureBreedingBuckets();
     return U.toArray(S.getBase()?.breedingHistory);
-  }
-
-  function getMutations() {
-    return U.toArray(S.getData()?.mutations);
-  }
-
-  function getTraits() {
-    return U.toArray(S.getData()?.traits);
-  }
-
-  function seedFallbackMutationsIfNeeded() {
-    const mutations = getMutations();
-    if (mutations.length > 0) return false;
-
-    const fallback = [
-      {
-        id: "camouflage",
-        name: "Camouflage",
-        description: "Blends into surroundings and gains stealth bonuses."
-      },
-      {
-        id: "gills",
-        name: "Gills",
-        description: "Allows better water movement and aquatic survival."
-      },
-      {
-        id: "claws",
-        name: "Claws",
-        description: "Improves physical attack capability."
-      },
-      {
-        id: "flight",
-        name: "Flight",
-        description: "Can access elevated or otherwise unreachable areas."
-      },
-      {
-        id: "thick_shell",
-        name: "Thick Shell",
-        description: "Improves defense and resilience."
-      },
-      {
-        id: "luminous",
-        name: "Luminous",
-        description: "Emits a gentle glow in dark areas."
-      },
-      {
-        id: "bright_eyes",
-        name: "Bright Eyes",
-        description: "Improves awareness, scouting, and night activity."
-      },
-      {
-        id: "odd_coloration",
-        name: "Odd Coloration",
-        description: "Unusual coloration. Maybe useful. Maybe just weird."
-      },
-      {
-        id: "hardy",
-        name: "Hardy",
-        description: "Improves general resilience and survival."
-      },
-      {
-        id: "quick_reflexes",
-        name: "Quick Reflexes",
-        description: "Improves speed and reaction time."
-      },
-      {
-        id: "spore_touched",
-        name: "Spore-Touched",
-        description: "A suspicious fungal mutation with unpredictable uses."
-      }
-    ];
-
-    S.replaceDataBucket("mutations", fallback);
-    return true;
-  }
-
-  function seedFallbackTraitsIfNeeded() {
-    const traits = getTraits();
-    if (traits.length > 0) return false;
-
-    const fallback = [
-      { id: "gills", name: "Gills" },
-      { id: "jump", name: "Jump" },
-      { id: "shell", name: "Shell" },
-      { id: "flight", name: "Flight" },
-      { id: "camouflage", name: "Camouflage" },
-      { id: "claws", name: "Claws" },
-      { id: "wet_skin", name: "Wet Skin" },
-      { id: "schooling", name: "Schooling" },
-      { id: "swim", name: "Swim" },
-      { id: "keen_nose", name: "Keen Nose" },
-      { id: "field_notebook", name: "Field Notebook" },
-      { id: "weird_luck", name: "Weird Luck" },
-      { id: "scrappy", name: "Scrappy" }
-    ];
-
-    S.replaceDataBucket("traits", fallback);
-    return true;
   }
 
   function getAnimalName(speciesId) {
@@ -258,8 +164,26 @@ window.GrabLabBreeding = (() => {
       return { ok: false, reason: "Cross-species breeding unlocks at player level 3." };
     }
 
-    // Once the player reaches level 3, all species can crossbreed in this prototype.
-    // Future JSON can add stricter compatibility rules, but for now level is the only cross-species gate.
+    if (a.speciesId !== b.speciesId) {
+      const aDef = S.getAnimalDef(a.speciesId);
+      const bDef = S.getAnimalDef(b.speciesId);
+
+      const aFamily = a.family || aDef?.family || "unknown";
+      const bFamily = b.family || bDef?.family || "unknown";
+
+      const allowedByTag =
+        U.toArray(aDef?.crossBreedWith).includes(b.speciesId) ||
+        U.toArray(bDef?.crossBreedWith).includes(a.speciesId) ||
+        aFamily === bFamily;
+
+      if (!allowedByTag) {
+        return {
+          ok: false,
+          reason: "Those species are too genetically distant. Same-family or explicitly compatible species can crossbreed."
+        };
+      }
+    }
+
     return { ok: true };
   }
 
@@ -384,11 +308,21 @@ window.GrabLabBreeding = (() => {
       if (!inherited.includes(trait) && Math.random() < 0.7) inherited.push(trait);
     });
 
+    if (a.speciesId !== b.speciesId) {
+      // Cross-species offspring should be where traversal traits become exciting.
+      // Parent traits still matter most, but hybrids get a small extra roll at movement traits.
+      ["gills", "swim", "fins", "flight", "wings", "claws", "camouflage"].forEach((trait) => {
+        if (!inherited.includes(trait) && pool.includes(trait) && Math.random() < 0.28) {
+          inherited.push(trait);
+        }
+      });
+    }
+
     if (!inherited.length) {
       inherited.push(U.pick(pool) || "scrappy");
     }
 
-    return U.uniqueBy(inherited, (x) => String(x)).slice(0, 6);
+    return U.uniqueBy(inherited, (x) => String(x)).slice(0, 8);
   }
 
   function getInheritedMutations(a, b, additive = null) {
@@ -410,7 +344,7 @@ window.GrabLabBreeding = (() => {
 
     const baseMutationChance = Number(CFG.BREEDING?.baseMutationChance ?? 0.06) + mutationBonus;
     if (Math.random() < baseMutationChance) {
-      mutations.push(U.pick(["bright_eyes", "odd_coloration", "hardy", "quick_reflexes", "spore_touched"]) || "odd_coloration");
+      mutations.push(U.pick(["bright_eyes", "odd_coloration", "hardy", "quick_reflexes", "spore_touched", "fins", "wings"]) || "odd_coloration");
     }
 
     return U.uniqueBy(mutations, (x) => String(x)).slice(0, 5);
@@ -432,36 +366,6 @@ window.GrabLabBreeding = (() => {
     if (bDef.hybridOffspring) return bDef.hybridOffspring;
 
     return Math.random() < 0.5 ? a.speciesId : b.speciesId;
-  }
-
-  function getSpeciesIcon(speciesId) {
-    const def = S.getAnimalDef(speciesId) || {};
-    if (def.icon) return def.icon;
-    if (String(speciesId || "").includes("fish")) return "🐟";
-    if (String(speciesId || "").includes("turtle")) return "🐢";
-    if (String(speciesId || "").includes("moth")) return "🦋";
-    if (String(speciesId || "").includes("crab")) return "🦀";
-    if (String(speciesId || "").includes("fox")) return "🦊";
-    if (String(speciesId || "").includes("marsy")) return "🦝";
-    return "🐾";
-  }
-
-  function getMixedSpeciesIcon(a, b, childSpeciesId) {
-    if (!a || !b || a.speciesId === b.speciesId) {
-      return getSpeciesIcon(childSpeciesId);
-    }
-
-    const iconA = getSpeciesIcon(a.speciesId);
-    const iconB = getSpeciesIcon(b.speciesId);
-    return iconA === iconB ? iconA : `${iconA}${iconB}`;
-  }
-
-  function getMixedSpeciesName(a, b, childSpeciesId) {
-    if (!a || !b || a.speciesId === b.speciesId) return getAnimalName(childSpeciesId);
-
-    const aName = getAnimalName(a.speciesId);
-    const bName = getAnimalName(b.speciesId);
-    return `${aName} / ${bName} Mix`;
   }
 
   function getOffspringName(speciesId, a, b) {
@@ -519,17 +423,12 @@ window.GrabLabBreeding = (() => {
       Number(b.genetics?.generation || 1)
     ) + 1;
 
-    const isHybrid = a.speciesId !== b.speciesId;
     const offspring = animals.createSpecimen(speciesId, {
       name: getOffspringName(speciesId, a, b),
       level: 1,
       traits,
       mutations,
       stats: blendStats(a, b, speciesId),
-      icon: getMixedSpeciesIcon(a, b, speciesId),
-      iconBg: isHybrid ? "hybrid" : (S.getAnimalDef(speciesId)?.iconBg || null),
-      mixedSpeciesLabel: getMixedSpeciesName(a, b, speciesId),
-      tags: isHybrid ? ["hybrid", "cross_species"] : [],
       genetics: {
         generation,
         lineage: U.uniqueBy([
@@ -542,8 +441,6 @@ window.GrabLabBreeding = (() => {
         parentBId: b.id,
         parentASpeciesId: a.speciesId,
         parentBSpeciesId: b.speciesId,
-        parentSpeciesIds: U.uniqueBy([a.speciesId, b.speciesId], (x) => String(x)),
-        isHybrid,
         additiveId: additive?.itemId || null
       },
       notes: `Bred from ${a.name || getAnimalName(a.speciesId)} and ${b.name || getAnimalName(b.speciesId)}.`
@@ -727,27 +624,27 @@ window.GrabLabBreeding = (() => {
 
     if (!candidates.length) {
       const msg = options.compatibleWith
-        ? "No compatible second parent available. Same species works now; at level 3 every species can crossbreed."
+        ? "No compatible second parent available. Same species works now; cross-species unlocks at level 3."
         : "No eligible parents. Parents must be in a habitat, not Cryo/Party, and have enough hunger, comfort, and cleanliness.";
       host.appendChild(U.createEl("div", { className: "card", text: msg }));
       return;
     }
 
     candidates.forEach((specimen) => {
-      const selected = selectedId === specimen.id;
-      const canBreed = isSpecimenActuallyBreedable(specimen);
+      const check = isSpecimenActuallyBreedable(specimen);
       const location = getSpecimenLocation(specimen);
-      const animalDef = S.getAnimalDef(specimen.speciesId) || {};
-      const icon = specimen.icon || animalDef.icon || "🐾";
-
+      const habitat = getSpecimenHabitat(specimen.id);
       const card = U.createEl("div", {
-        className: `card ${selected ? "selected" : ""}`,
-        html: `
-          <div class="meta-title">${htmlEscape(icon)} ${htmlEscape(getSpecimenName(specimen))}</div>
-          <div class="meta-sub">${htmlEscape(getAnimalName(specimen.speciesId))} • ${htmlEscape(location)}</div>
-          <div class="meta-sub">${htmlEscape(canBreed.ok ? "Ready" : canBreed.reason)}</div>
-        `
+        className: `card ${selectedId === specimen.id ? "selected" : ""}`
       });
+
+      card.innerHTML = `
+        <div class="meta-title">${htmlEscape(getSpecimenName(specimen))}</div>
+        <div class="meta-sub">${htmlEscape(getAnimalName(specimen.speciesId))} • Lv ${htmlEscape(String(specimen.level || 1))}</div>
+        <div class="meta-sub">${htmlEscape(location)}${habitat ? ` • ${htmlEscape(habitat.name || "Habitat")}` : ""}</div>
+        <div class="meta-sub">Hunger ${htmlEscape(String(Math.round(specimen.needs?.hunger ?? 0)))} • Comfort ${htmlEscape(String(Math.round(specimen.needs?.comfort ?? 0)))} • Clean ${htmlEscape(String(Math.round(specimen.needs?.cleanliness ?? 0)))}</div>
+        ${check.ok ? `<div class="success-text">Eligible</div>` : `<div class="warning-text">${htmlEscape(check.reason)}</div>`}
+      `;
 
       U.on(card, "click", () => {
         onSelect(specimen.id);
@@ -758,32 +655,41 @@ window.GrabLabBreeding = (() => {
   }
 
   function renderAdditives(host) {
+    if (!host) return;
+
     const additives = getBreedingAdditives();
+
+    if (!additives.length) {
+      host.insertAdjacentHTML("beforeend", `
+        <h4>Additive</h4>
+        <p>No breeding additives available.</p>
+      `);
+      return;
+    }
 
     host.insertAdjacentHTML("beforeend", `
       <h4>Additive</h4>
-      <div id="breedingAdditiveList" class="card-list">
-        ${
-          additives.length
-            ? additives.map((entry) => `
-              <div class="card compact-card breeding-additive-card ${state.selectedAdditiveId === entry.itemId ? "selected" : ""}" data-item-id="${htmlEscape(entry.itemId)}">
-                <div class="meta-title">${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity))}</div>
-                <div class="meta-sub">${htmlEscape(entry.source)}</div>
-              </div>
-            `).join("")
-            : `<div class="card compact-card">No additives available. Additive use is optional.</div>`
-        }
-      </div>
+      <select id="breedingAdditiveSelect">
+        <option value="">No additive</option>
+        ${additives.map((entry) => `
+          <option value="${htmlEscape(entry.itemId)}" ${state.selectedAdditiveId === entry.itemId ? "selected" : ""}>
+            ${htmlEscape(entry.name)} x${htmlEscape(String(entry.quantity))} (${htmlEscape(entry.source)})
+          </option>
+        `).join("")}
+      </select>
     `);
 
-    U.qsa(".breeding-additive-card", host).forEach((card) => {
-      U.on(card, "click", () => {
-        setAdditive(card.dataset.itemId || null);
+    const select = U.byId("breedingAdditiveSelect");
+    if (select) {
+      U.on(select, "change", () => {
+        setAdditive(select.value || null);
       });
-    });
+    }
   }
 
   function renderJobs(host) {
+    if (!host) return;
+
     const jobs = getBreedingJobs();
 
     host.insertAdjacentHTML("beforeend", `
@@ -831,7 +737,7 @@ window.GrabLabBreeding = (() => {
     const selectedAdditive = getSelectedAdditive();
 
     const unlockText = isCrossSpeciesUnlocked()
-      ? "Cross-species breeding unlocked. All species can crossbreed in this prototype."
+      ? "Cross-species breeding unlocked."
       : `Cross-species breeding unlocks at level 3. Current level: ${getPlayerLevel()}.`;
 
     host.innerHTML = `
@@ -959,18 +865,8 @@ window.GrabLabBreeding = (() => {
 
     getBreedingAdditives,
     getSelectedAdditive,
-    consumeAdditive,
 
-    getInheritedTraits,
-    getInheritedMutations,
-    chooseOffspringSpecies,
-    getSpeciesIcon,
-    getMixedSpeciesIcon,
-    getMixedSpeciesName,
-    getOffspringName,
-    blendStats,
     createOffspring,
-
     startBreedingJob,
     completeBreedingJob,
     cancelBreedingJob,

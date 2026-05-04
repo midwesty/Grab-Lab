@@ -32,11 +32,12 @@ window.GrabLabInput = (() => {
     downAt: 0,
     downScreenX: 0,
     downScreenY: 0,
+    dragCameraActive: false,
+    dragLastScreenX: 0,
+    dragLastScreenY: 0,
     lastCanvasX: 0,
     lastCanvasY: 0,
     selectedWorldTarget: null,
-    selectedWorldTargetLocked: false,
-    selectedWorldTargetSelectedAt: 0,
     interactionRadiusPx: 38,
     visiblePoiRadiusTiles: 5,
     harvestMenuOpen: false,
@@ -98,8 +99,10 @@ window.GrabLabInput = (() => {
   }
 
   function canvasToTile(x, y) {
-    const tileSize = CFG.WORLD.tileSize;
     const worldApi = getWorldApi();
+    if (worldApi?.canvasToTile) return worldApi.canvasToTile(x, y);
+
+    const tileSize = worldApi?.getTileSize?.() || CFG.WORLD.tileSize;
     const camera = worldApi?.getCameraOrigin ? worldApi.getCameraOrigin() : { startX: 0, startY: 0 };
 
     return {
@@ -247,6 +250,30 @@ window.GrabLabInput = (() => {
     );
   }
 
+  function isGrabbableResourcePoi(poi) {
+    return Boolean(
+      poi &&
+      poi.grabbable !== false &&
+      (
+        poi.type === "resource" ||
+        poi.type === "fungal_patch" ||
+        poi.type === "plant" ||
+        poi.type === "algae" ||
+        poi.plantId ||
+        poi.harvestItemId
+      )
+    );
+  }
+
+  function getPlantDef(plantId) {
+    if (!plantId) return null;
+    return S.getDataEntry?.("plants", plantId) || U.toArray(S.getData()?.plants).find((plant) => plant.id === plantId) || null;
+  }
+
+  function getItemName(itemId) {
+    return S.getItemDef?.(itemId)?.name || U.titleCase(itemId || "item");
+  }
+
   function isHostilePoi(poi) {
     return Boolean(
       poi &&
@@ -318,11 +345,12 @@ window.GrabLabInput = (() => {
     const here = target ? dist === 0 : false;
 
     if (grab) {
-      const canGrab = isCapturableAnimalPoi(target) && here;
-      const visibleButFar = isCapturableAnimalPoi(target) && !here;
+      const grabTarget = isCapturableAnimalPoi(target) || isGrabbableResourcePoi(target);
+      const canGrab = grabTarget && here;
+      const visibleButFar = grabTarget && !here;
 
       grab.textContent = canGrab
-        ? `Grab ${target.shortName || target.name || "Animal"}`
+        ? `Grab ${target.shortName || target.name || "Target"}`
         : visibleButFar
           ? `Too Far (${dist})`
           : "Grab";
@@ -330,10 +358,10 @@ window.GrabLabInput = (() => {
       grab.disabled = !canGrab;
       grab.classList.toggle("primary", canGrab);
       grab.title = canGrab
-        ? `Capture ${target.name || "this animal"}`
+        ? `Grab ${target.name || "this target"}`
         : visibleButFar
-          ? `${target.name || "Animal"} is visible but ${dist} tile${dist === 1 ? "" : "s"} away. Move closer to grab it.`
-          : "Select a capturable animal on your current tile first.";
+          ? `${target.name || "Target"} is visible but ${dist} tile${dist === 1 ? "" : "s"} away. Move closer to grab it.`
+          : "Select a capturable animal or grabbable resource on your current tile first.";
     }
 
     if (interact) {
@@ -352,11 +380,6 @@ window.GrabLabInput = (() => {
       } else {
         interact.textContent = "Interact";
       }
-
-      interact.classList.toggle("primary", Boolean(target));
-      interact.title = target
-        ? `${target.name || "Target"} selected.`
-        : "Select or inspect something nearby.";
     }
 
     if (attack) {
@@ -366,9 +389,7 @@ window.GrabLabInput = (() => {
       attack.textContent = canAttack ? "Fight" : "Attack";
       attack.title = target && !here
         ? `${target.name || "Target"} is visible but too far away. Move closer to fight.`
-        : target
-          ? `${target.name || "Target"} selected.`
-          : "";
+        : "";
     }
   }
 
@@ -415,6 +436,10 @@ window.GrabLabInput = (() => {
       promptBody = dist === 0
         ? `${promptBody} Press Grab to capture safely, or Attack to start a wildlife encounter.`
         : `${promptBody} ${distanceText} It is visible from here, but you need to move closer to grab or fight.`;
+    } else if (isGrabbableResourcePoi(target)) {
+      promptBody = dist === 0
+        ? `${promptBody} Press Grab to collect it into your inventory.`
+        : `${promptBody} ${distanceText} Move closer to grab it.`;
     } else if (isHostilePoi(target)) {
       promptBody = dist === 0
         ? `${promptBody} Tap again or press Attack to start combat.`
@@ -433,51 +458,13 @@ window.GrabLabInput = (() => {
     if (box) U.hide(box);
   }
 
-  function setSelectedWorldTarget(target, options = {}) {
-    const shouldLock = options.lock !== false && Boolean(target);
-
+  function setSelectedWorldTarget(target) {
     state.selectedWorldTarget = target || null;
-    state.selectedWorldTargetLocked = shouldLock;
-    state.selectedWorldTargetSelectedAt = target ? U.now() : 0;
-
     S.updateRuntime({
       selectedEntityId: target?.id || null
     });
-
     showInteractionPromptFor(target);
     updateActionButtonsForTarget(target || null);
-  }
-
-  function clearSelectedWorldTarget(options = {}) {
-    state.selectedWorldTarget = null;
-    state.selectedWorldTargetLocked = false;
-    state.selectedWorldTargetSelectedAt = 0;
-
-    S.updateRuntime({
-      selectedEntityId: null
-    });
-
-    if (options.hidePrompt !== false) {
-      clearInteractionPrompt();
-    }
-
-    updateActionButtonsForTarget(null);
-  }
-
-  function refreshSelectedWorldTarget() {
-    if (!state.selectedWorldTarget?.id) return false;
-
-    const current = getVisiblePoiList(state.visiblePoiRadiusTiles).find((poi) => poi.id === state.selectedWorldTarget.id);
-
-    if (!current || isPoiResolved(current)) {
-      clearSelectedWorldTarget();
-      return false;
-    }
-
-    state.selectedWorldTarget = current;
-    showInteractionPromptFor(current);
-    updateActionButtonsForTarget(current);
-    return true;
   }
 
   function moveToClickedTile(tileX, tileY) {
@@ -566,7 +553,7 @@ window.GrabLabInput = (() => {
 
       markPoiResolved(poi, "recruited");
       A.playSfx("ui_confirm").catch?.(() => {});
-      clearSelectedWorldTarget();
+      setSelectedWorldTarget(null);
       UI.renderEverything();
       return true;
     }
@@ -576,7 +563,40 @@ window.GrabLabInput = (() => {
     return false;
   }
 
+  function grabPoiResource(poi) {
+    if (!poi) return false;
+
+    if (!isPoiOnCurrentTile(poi)) {
+      const dist = getPoiDistanceTiles(poi);
+      S.addToast(`${poi.name || "Resource"} is ${dist} tile${dist === 1 ? "" : "s"} away. Move closer to grab it.`, "warning");
+      moveTowardPoi(poi);
+      return false;
+    }
+
+    const plant = getPlantDef(poi.plantId);
+    const itemId = poi.harvestItemId || plant?.harvestItemId || poi.itemId || "fiber_bundle";
+    const min = Number(poi.yieldMin ?? plant?.yieldMin ?? 1);
+    const max = Number(poi.yieldMax ?? plant?.yieldMax ?? min);
+    const qty = U.randInt(Math.min(min, max), Math.max(min, max));
+
+    S.addItem("player", itemId, qty);
+    markPoiResolved(poi, "harvested");
+
+    const label = getItemName(itemId);
+    S.logActivity(`Grabbed ${poi.name || "resource"}: ${label} x${qty}.`, "success");
+    S.addToast(`${label} x${qty}`, "success");
+    getPlayerApi()?.awardSkillXp?.("harvesting", 3 + qty, "grabbing resource");
+    A.playSfx("ui_confirm").catch?.(() => {});
+    setSelectedWorldTarget(null);
+    UI.renderEverything();
+    return true;
+  }
+
   function capturePoiAnimal(poi) {
+    if (isGrabbableResourcePoi(poi)) {
+      return grabPoiResource(poi);
+    }
+
     const AN = getAnimalsApi();
     if (!AN) {
       S.addToast("Wildlife system not available yet.", "error");
@@ -627,7 +647,7 @@ window.GrabLabInput = (() => {
     S.logActivity(`${specimen.name} was secured and sent to Cryo storage. Manage it from the Party screen.`, "success");
     S.logActivity("Party > All Captures is now the main place to assign habitats, add to party, feed, breed, or release captures.", "info");
     A.playSfx("ui_confirm").catch?.(() => {});
-    clearSelectedWorldTarget();
+    setSelectedWorldTarget(null);
     UI.renderEverything();
     return true;
   }
@@ -702,7 +722,7 @@ window.GrabLabInput = (() => {
       S.logActivity(`${poi.name || "That target"} is visible ${dist} tile${dist === 1 ? "" : "s"} away. Moving closer.`, "info");
       S.addToast(`Tracking ${poi.name || "target"}.`, "info");
       moveTowardPoi(poi);
-      setSelectedWorldTarget(poi, { lock: true });
+      setSelectedWorldTarget(poi);
       return;
     }
 
@@ -714,13 +734,13 @@ window.GrabLabInput = (() => {
     if (sameTarget && isCapturableAnimalPoi(poi)) {
       S.logActivity(`${poi.name || "Animal"} is close enough to grab. Use the Grab button to capture safely, or Attack to start a wildlife encounter.`, "info");
       S.addToast(`Use Grab to capture ${poi.name || "animal"}.`, "info");
-      setSelectedWorldTarget(poi, { lock: true });
+      setSelectedWorldTarget(poi);
       return;
     }
 
     if (sameTarget && isHostilePoi(poi)) {
       startPoiCombat(poi);
-      setSelectedWorldTarget(poi, { lock: true });
+      setSelectedWorldTarget(poi);
       return;
     }
 
@@ -742,6 +762,14 @@ window.GrabLabInput = (() => {
         S.logActivity(`Spotted ${poi.name || "a capturable animal"} ${dist} tile${dist === 1 ? "" : "s"} away: ${detailText}`, "info");
         S.addToast(`${poi.name || "Animal"} visible ${dist} tile${dist === 1 ? "" : "s"} away.`, "info");
       }
+    } else if (isGrabbableResourcePoi(poi)) {
+      if (here) {
+        S.logActivity(`Inspected ${poi.name || "a resource"}: ${detailText}`, "info");
+        S.addToast(`Use Grab to collect ${poi.name || "resource"}.`, "info");
+      } else {
+        S.logActivity(`Spotted ${poi.name || "a resource"} ${dist} tile${dist === 1 ? "" : "s"} away: ${detailText}`, "info");
+        S.addToast(`${poi.name || "Resource"} visible ${dist} tile${dist === 1 ? "" : "s"} away.`, "info");
+      }
     } else if (isHostilePoi(poi)) {
       if (here) {
         S.logActivity(`Spotted threat ${poi.name || "hostile"}: ${detailText}`, "warning");
@@ -755,7 +783,7 @@ window.GrabLabInput = (() => {
       S.addToast(`Inspected ${poi.name || "point of interest"}.`, "info");
     }
 
-    setSelectedWorldTarget(poi, { lock: true });
+    setSelectedWorldTarget(poi);
     A.playSfx("ui_confirm").catch?.(() => {});
     UI.renderEverything();
   }
@@ -779,7 +807,7 @@ window.GrabLabInput = (() => {
         S.logActivity(`Context action opened for ${poi.name || "POI"}.${suffix}`, "info");
         S.addToast(`Context action: ${poi.name || "POI"}`, "warning");
       }
-      setSelectedWorldTarget(poi, { lock: true });
+      setSelectedWorldTarget(poi);
       return;
     }
 
@@ -797,7 +825,7 @@ window.GrabLabInput = (() => {
     }
 
     const tile = canvasToTile(canvasX, canvasY);
-    clearSelectedWorldTarget();
+    setSelectedWorldTarget(null);
     moveToClickedTile(tile.x, tile.y);
   }
 
@@ -944,164 +972,160 @@ window.GrabLabInput = (() => {
     const tile = S.getCurrentMapTile();
     const tableId = getLootTableForHarvestAction("gather_loot", tile);
     const table = getLootTableById(tableId) || getFallbackLootTable(tableId);
-    const rollCount = tile?.biomeId === "fungal_grove" ? 3 : 2;
+
+    const pool = [
+      ...U.toArray(table?.entries),
+      ...getPoiHarvestBonusEntries(tile)
+    ];
+
+    const rolls = tile?.biomeId === "fungal_grove" ? U.randInt(2, 4) : U.randInt(2, 3);
     const gains = [];
 
-    for (let i = 0; i < rollCount; i += 1) {
-      const entry = weightedEntryPick(table.entries);
-      if (!entry) continue;
+    for (let i = 0; i < rolls; i += 1) {
+      const picked = weightedEntryPick(pool);
+      if (!picked?.itemId) continue;
 
-      const quantity = rollEntryQuantity(entry);
-      const itemDef = S.getItemDef(entry.itemId);
+      const qty = rollEntryQuantity(picked);
+      const def = S.getItemDef(picked.itemId);
       gains.push({
-        itemId: entry.itemId,
-        name: itemDef?.name || U.titleCase(entry.itemId),
-        quantity
+        itemId: picked.itemId,
+        quantity: qty,
+        name: def?.name || U.titleCase(picked.itemId)
       });
     }
 
-    if (tile?.pointsOfInterest?.some((poi) => poi.type === "loot")) {
-      const bonus = weightedEntryPick(getFallbackLootTable("starter_cache").entries);
-      if (bonus) {
-        const itemDef = S.getItemDef(bonus.itemId);
-        gains.push({
-          itemId: bonus.itemId,
-          name: itemDef?.name || U.titleCase(bonus.itemId),
-          quantity: rollEntryQuantity(bonus)
-        });
-      }
+    if (!gains.length) {
+      S.addToast("You came up empty-handed.", "warning");
+      return false;
     }
 
     addHarvestResultsToInventory(gains, "player");
-
-    const xp = 3 + gains.length;
-    PAPI?.awardSkillXp?.("foraging", xp, "gathering loot");
+    PAPI?.registerHarvestAction?.();
 
     const summary = summarizeGains(gains);
-    S.logActivity(summary ? `Gathered loot: ${summary}.` : "Gathered around but found nothing useful.", summary ? "success" : "warning");
-    S.addToast(summary ? `Found: ${summary}` : "Nothing useful found.", summary ? "success" : "warning");
-
-    if (Math.random() < 0.12 && tile?.biomeId === "fungal_grove") {
-      S.modifyPlayerStat("infection", 2);
-      S.logActivity("Spore exposure increased your infection slightly.", "warning");
-    }
-
+    S.logActivity(`Gathered loot near ${tile?.name || "this tile"}: ${summary}.`, "success");
+    S.addToast("Gathered loot.", "success");
+    A.playSfx("ui_confirm").catch?.(() => {});
     UI.renderEverything();
-    return gains;
+    return true;
   }
 
   function performGatherWater() {
     const PAPI = getPlayerApi();
+    const world = S.getWorld();
     const tile = S.getCurrentMapTile();
-    const biomeId = tile?.biomeId || S.getWorld()?.currentBiomeId || "";
-    const wetBonus = ["river_channel", "wetland", "mudflats", "field_station_island"].includes(biomeId);
-    const quantity = wetBonus ? U.randInt(2, 4) : U.randInt(1, 2);
+    const biomeId = tile?.biomeId || world.currentBiomeId || "field_station_island";
 
-    S.addItem("player", "fresh_water", quantity);
-    PAPI?.awardSkillXp?.("survival", wetBonus ? 4 : 2, "gathering water");
+    let amount = 1;
 
-    if (!wetBonus && Math.random() < 0.15) {
-      S.modifyPlayerStat("health", -2);
-      S.logActivity("The water source was questionable. Your stomach files a complaint.", "warning");
+    if (["river_channel", "wetland", "mudflats"].includes(biomeId)) {
+      amount = U.randInt(2, 4);
+    } else {
+      amount = U.randInt(1, 2);
     }
 
-    S.logActivity(`Gathered Fresh Water x${quantity}.`, "success");
-    S.addToast(`Fresh Water x${quantity}`, "success");
+    if (world.weather === "rain" || world.weather === "storm") {
+      amount += 1;
+    }
+
+    S.addItem("player", "fresh_water", amount);
+    PAPI?.registerHarvestAction?.();
+
+    S.logActivity(`Collected fresh water x${amount} near ${tile?.name || "this tile"}.`, "success");
+    S.addToast(`Fresh water x${amount}`, "success");
+    A.playSfx("ui_confirm").catch?.(() => {});
     UI.renderEverything();
-    return [{ itemId: "fresh_water", quantity }];
+    return true;
   }
 
-  function performHarvest() {
+  function getDirectHarvestPool(tile = S.getCurrentMapTile()) {
+    const biomeId = tile?.biomeId || S.getWorld()?.currentBiomeId || "field_station_island";
+
+    if (biomeId === "fungal_grove") {
+      return [
+        { itemId: "mold_sample_jar", quantityMin: 1, quantityMax: 2, weight: 28 },
+        { itemId: "luminous_spores", quantityMin: 1, quantityMax: 1, weight: 16 },
+        { itemId: "chameleon_skin", quantityMin: 1, quantityMax: 2, weight: 12 },
+        { itemId: "berries_wild", quantityMin: 1, quantityMax: 2, weight: 8 }
+      ];
+    }
+
+    if (["river_channel", "wetland", "mudflats"].includes(biomeId)) {
+      return [
+        { itemId: "algae_bundle", quantityMin: 1, quantityMax: 3, weight: 24 },
+        { itemId: "fiber_bundle", quantityMin: 1, quantityMax: 3, weight: 18 },
+        { itemId: "bait_worm", quantityMin: 1, quantityMax: 3, weight: 14 },
+        { itemId: "scrap_wood", quantityMin: 1, quantityMax: 2, weight: 12 },
+        { itemId: "berries_wild", quantityMin: 1, quantityMax: 2, weight: 10 }
+      ];
+    }
+
+    return [
+      { itemId: "fiber_bundle", quantityMin: 1, quantityMax: 4, weight: 26 },
+      { itemId: "berries_wild", quantityMin: 1, quantityMax: 3, weight: 18 },
+      { itemId: "scrap_wood", quantityMin: 1, quantityMax: 3, weight: 16 },
+      { itemId: "rope_bundle", quantityMin: 1, quantityMax: 2, weight: 8 }
+    ];
+  }
+
+  function performHarvestResources() {
     const PAPI = getPlayerApi();
     const tile = S.getCurrentMapTile();
-    const biomeId = tile?.biomeId || S.getWorld()?.currentBiomeId || "field_station_island";
-    const plantDefs = U.toArray(S.getData()?.plants).filter((plant) => U.toArray(plant.biomes).includes(biomeId));
+    const pool = [
+      ...getDirectHarvestPool(tile),
+      ...getPoiHarvestBonusEntries(tile)
+    ];
+
+    const rolls = U.randInt(2, 4);
     const gains = [];
 
-    const rollPlant = plantDefs.length ? U.pick(plantDefs) : null;
+    for (let i = 0; i < rolls; i += 1) {
+      const picked = weightedEntryPick(pool);
+      if (!picked?.itemId) continue;
 
-    if (rollPlant?.yields) {
-      U.toArray(rollPlant.yields).forEach((yieldEntry) => {
-        const chance = Number(yieldEntry.chance ?? 1);
-        if (Math.random() <= chance) {
-          const min = Number(yieldEntry.quantityMin ?? 1);
-          const max = Number(yieldEntry.quantityMax ?? min);
-          const quantity = U.randInt(Math.min(min, max), Math.max(min, max));
-          const itemDef = S.getItemDef(yieldEntry.itemId);
-          gains.push({
-            itemId: yieldEntry.itemId,
-            name: itemDef?.name || U.titleCase(yieldEntry.itemId),
-            quantity
-          });
-        }
-      });
-    } else {
-      const fallback = biomeId === "fungal_grove"
-        ? [
-          { itemId: "mold_sample_jar", quantity: U.randInt(1, 2) },
-          { itemId: "luminous_spores", quantity: Math.random() < 0.35 ? 1 : 0 }
-        ]
-        : [
-          { itemId: "fiber_bundle", quantity: U.randInt(2, 5) },
-          { itemId: "berries_wild", quantity: Math.random() < 0.55 ? U.randInt(1, 3) : 0 }
-        ];
-
-      fallback.forEach((entry) => {
-        if (entry.quantity <= 0) return;
-        const itemDef = S.getItemDef(entry.itemId);
-        gains.push({
-          itemId: entry.itemId,
-          name: itemDef?.name || U.titleCase(entry.itemId),
-          quantity: entry.quantity
-        });
+      const qty = rollEntryQuantity(picked);
+      const def = S.getItemDef(picked.itemId);
+      gains.push({
+        itemId: picked.itemId,
+        quantity: qty,
+        name: def?.name || U.titleCase(picked.itemId)
       });
     }
 
-    const bonusEntries = getPoiHarvestBonusEntries(tile);
-    if (bonusEntries.length && Math.random() < 0.4) {
-      const bonus = weightedEntryPick(bonusEntries);
-      if (bonus) {
-        const itemDef = S.getItemDef(bonus.itemId);
-        gains.push({
-          itemId: bonus.itemId,
-          name: itemDef?.name || U.titleCase(bonus.itemId),
-          quantity: rollEntryQuantity(bonus)
-        });
-      }
+    if (!gains.length) {
+      S.addToast("No harvestable materials found.", "warning");
+      return false;
     }
 
     addHarvestResultsToInventory(gains, "player");
-
-    const xp = 4 + gains.length;
-    PAPI?.awardSkillXp?.("foraging", xp, "harvesting");
+    PAPI?.registerHarvestAction?.();
 
     const summary = summarizeGains(gains);
-    S.logActivity(summary ? `Harvested: ${summary}.` : "Harvested carefully but came up empty.", summary ? "success" : "warning");
-    S.addToast(summary ? `Harvested: ${summary}` : "Nothing harvested.", summary ? "success" : "warning");
-
-    if (biomeId === "fungal_grove" && Math.random() < 0.18) {
-      S.modifyPlayerStat("infection", 3);
-      S.addToast("Spore exposure!", "warning");
-    }
-
+    S.logActivity(`Harvested local materials near ${tile?.name || "this tile"}: ${summary}.`, "success");
+    S.addToast("Harvested materials.", "success");
+    A.playSfx("ui_confirm").catch?.(() => {});
     UI.renderEverything();
-    return gains;
+    return true;
   }
 
   function performHarvestAction(actionId) {
     closeHarvestMenu();
 
-    if (actionId === "gather_loot") return performGatherLoot();
-    if (actionId === "gather_water") return performGatherWater();
-    if (actionId === "harvest") return performHarvest();
-
-    S.addToast("Unknown harvest action.", "error");
-    return null;
+    switch (String(actionId || "")) {
+      case "gather_loot":
+        return performGatherLoot();
+      case "gather_water":
+        return performGatherWater();
+      case "harvest":
+        return performHarvestResources();
+      default:
+        return false;
+    }
   }
 
   function closeHarvestMenu() {
-    const existing = U.byId(state.harvestMenuId);
-    if (existing) existing.remove();
+    const node = U.byId(state.harvestMenuId);
+    if (node) node.remove();
     state.harvestMenuOpen = false;
   }
 
@@ -1109,20 +1133,17 @@ window.GrabLabInput = (() => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "panel-btn";
+    btn.dataset.harvestAction = actionId;
     btn.style.display = "block";
     btn.style.width = "100%";
-    btn.style.marginBottom = ".35rem";
-    btn.innerHTML = `
-      <strong>${htmlEscape(label)}</strong>
-      <span style="display:block;font-size:.82em;opacity:.78;margin-top:.15rem;">${htmlEscape(desc)}</span>
-    `;
-
-    U.on(btn, "click", (evt) => {
+    btn.style.textAlign = "left";
+    btn.style.margin = "0 0 .4rem 0";
+    btn.innerHTML = `<strong>${htmlEscape(label)}</strong><br><span style="opacity:.8;font-size:.9em;">${htmlEscape(desc)}</span>`;
+    btn.addEventListener("click", (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
       performHarvestAction(actionId);
     });
-
     return btn;
   }
 
@@ -1131,7 +1152,6 @@ window.GrabLabInput = (() => {
 
     const menu = document.createElement("div");
     menu.id = state.harvestMenuId;
-    menu.className = "floating-harvest-menu";
     menu.setAttribute("role", "dialog");
     menu.style.position = "fixed";
     menu.style.zIndex = "120";
@@ -1205,15 +1225,16 @@ window.GrabLabInput = (() => {
     state.downAt = U.now();
     state.downScreenX = evt.clientX ?? 0;
     state.downScreenY = evt.clientY ?? 0;
+    state.dragLastScreenX = state.downScreenX;
+    state.dragLastScreenY = state.downScreenY;
+    state.dragCameraActive = false;
 
     const point = screenToCanvas(evt, canvas);
     state.lastCanvasX = point.x;
     state.lastCanvasY = point.y;
 
     const poi = findPoiAtCanvasPoint(point.x, point.y);
-    if (poi) {
-      setSelectedWorldTarget(poi, { lock: true });
-    }
+    setSelectedWorldTarget(poi);
 
     if (evt.pointerType === "touch" || evt.pointerType === "pen") {
       startHoldForContext(evt, point.x, point.y);
@@ -1229,21 +1250,11 @@ window.GrabLabInput = (() => {
     state.lastCanvasY = point.y;
 
     if (!state.pointerDown) {
-      // Sticky selection rule:
-      // Moving the mouse should never clear or replace a clicked POI.
-      // The player keeps Grab/Attack/Interact options until they click a different POI,
-      // choose an action, move intentionally, or the POI is resolved.
-      if (state.selectedWorldTargetLocked) {
-        updateActionButtonsForTarget(state.selectedWorldTarget);
-        return;
-      }
-
       const poi = findPoiAtCanvasPoint(point.x, point.y);
       if (poi) {
-        showInteractionPromptFor(poi);
-        updateActionButtonsForTarget(poi);
-      } else {
-        updateActionButtonsForTarget(state.selectedWorldTarget || null);
+        setSelectedWorldTarget(poi);
+      } else if (state.selectedWorldTarget && isPoiOnCurrentTile(state.selectedWorldTarget)) {
+        setSelectedWorldTarget(null);
       }
       return;
     }
@@ -1254,6 +1265,13 @@ window.GrabLabInput = (() => {
 
     if (movedDistance > CFG.UI.dragThresholdPx * 2) {
       clearHoldTimer();
+      state.dragCameraActive = true;
+      const dx = (evt.clientX ?? 0) - state.dragLastScreenX;
+      const dy = (evt.clientY ?? 0) - state.dragLastScreenY;
+      getWorldApi()?.panCameraPixels?.(dx, dy);
+      state.dragLastScreenX = evt.clientX ?? state.dragLastScreenX;
+      state.dragLastScreenY = evt.clientY ?? state.dragLastScreenY;
+      U.byId("worldViewport")?.classList.add("dragging-map");
     }
   }
 
@@ -1271,7 +1289,7 @@ window.GrabLabInput = (() => {
 
     clearHoldTimer();
 
-    if (!state.holdTriggered && movedDistance <= CFG.UI.dragThresholdPx * 2) {
+    if (!state.holdTriggered && !state.dragCameraActive && movedDistance <= CFG.UI.dragThresholdPx * 2) {
       if (evt.pointerType === "mouse" && evt.button === 2) {
         handleSecondaryWorldAction(point.x, point.y);
       } else {
@@ -1282,6 +1300,8 @@ window.GrabLabInput = (() => {
     state.pointerDown = false;
     state.activePointerId = null;
     state.holdTriggered = false;
+    state.dragCameraActive = false;
+    U.byId("worldViewport")?.classList.remove("dragging-map");
 
     void elapsed;
   }
@@ -1291,6 +1311,8 @@ window.GrabLabInput = (() => {
     state.pointerDown = false;
     state.activePointerId = null;
     state.holdTriggered = false;
+    state.dragCameraActive = false;
+    U.byId("worldViewport")?.classList.remove("dragging-map");
   }
 
   function handleWorldContextMenu(evt) {
@@ -1385,7 +1407,6 @@ window.GrabLabInput = (() => {
       return;
     }
 
-    clearSelectedWorldTarget();
     moveToClickedTile(clickedTileX, clickedTileY);
     drawMiniMap();
   }
@@ -1454,12 +1475,12 @@ window.GrabLabInput = (() => {
               : getFirstCapturablePoiOnTile();
 
             if (target) {
-              setSelectedWorldTarget(target, { lock: true });
+              setSelectedWorldTarget(target);
               capturePoiAnimal(target);
             } else {
               const visible = getFirstVisibleCapturablePoi();
               if (visible) {
-                setSelectedWorldTarget(visible, { lock: true });
+                setSelectedWorldTarget(visible);
                 S.addToast(`${visible.name || "Animal"} is visible nearby. Move closer to grab.`, "info");
               } else {
                 S.addToast("No capturable animal selected.", "warning");
@@ -1511,25 +1532,25 @@ window.GrabLabInput = (() => {
         const visibleHostile = getFirstVisibleHostilePoi();
 
         if (firstCapturable) {
-          setSelectedWorldTarget(firstCapturable, { lock: true });
+          setSelectedWorldTarget(firstCapturable);
           inspectPointOfInterest(firstCapturable);
           return;
         }
 
         if (firstHostile) {
-          setSelectedWorldTarget(firstHostile, { lock: true });
+          setSelectedWorldTarget(firstHostile);
           inspectPointOfInterest(firstHostile);
           return;
         }
 
         if (visibleCapturable) {
-          setSelectedWorldTarget(visibleCapturable, { lock: true });
+          setSelectedWorldTarget(visibleCapturable);
           inspectPointOfInterest(visibleCapturable);
           return;
         }
 
         if (visibleHostile) {
-          setSelectedWorldTarget(visibleHostile, { lock: true });
+          setSelectedWorldTarget(visibleHostile);
           inspectPointOfInterest(visibleHostile);
           return;
         }
@@ -1552,14 +1573,20 @@ window.GrabLabInput = (() => {
         evt.preventDefault();
         evt.stopPropagation();
 
-        const target = isCapturableAnimalPoi(state.selectedWorldTarget)
+        const target = (isCapturableAnimalPoi(state.selectedWorldTarget) || isGrabbableResourcePoi(state.selectedWorldTarget))
           ? state.selectedWorldTarget
           : getFirstCapturablePoiOnTile();
 
         if (!target) {
-          const visible = getFirstVisibleCapturablePoi();
+          const currentResource = getCurrentTilePoiList().find(isGrabbableResourcePoi);
+          if (currentResource) {
+            setSelectedWorldTarget(currentResource, { lock: true });
+            grabPoiResource(currentResource);
+            return;
+          }
+          const visible = getFirstVisibleCapturablePoi() || getVisiblePoiList(state.visiblePoiRadiusTiles).find(isGrabbableResourcePoi);
           if (visible) {
-            setSelectedWorldTarget(visible, { lock: true });
+            setSelectedWorldTarget(visible);
             S.addToast(`${visible.name || "Animal"} is visible nearby, but not close enough to grab.`, "warning");
           } else {
             S.addToast("No capturable animal selected or visible nearby.", "warning");
@@ -1567,7 +1594,7 @@ window.GrabLabInput = (() => {
           return;
         }
 
-        setSelectedWorldTarget(target, { lock: true });
+        setSelectedWorldTarget(target);
         capturePoiAnimal(target);
       });
     }
@@ -1601,7 +1628,7 @@ window.GrabLabInput = (() => {
         const target = state.selectedWorldTarget || getFirstHostilePoiOnTile();
 
         if (target) {
-          setSelectedWorldTarget(target, { lock: true });
+          setSelectedWorldTarget(target);
           startPoiCombat(target);
           return;
         }
@@ -1641,8 +1668,10 @@ window.GrabLabInput = (() => {
   function bindRuntimeRenders() {
     U.eventBus.on("world:playerMoved", () => {
       drawMiniMap();
+      clearInteractionPrompt();
       closeHarvestMenu();
-      clearSelectedWorldTarget();
+      setSelectedWorldTarget(null);
+      updateActionButtonsForTarget(null);
     });
 
     U.eventBus.on("world:tileRevealed", drawMiniMap);
@@ -1650,7 +1679,7 @@ window.GrabLabInput = (() => {
 
     U.eventBus.on("world:poiResolved", () => {
       drawMiniMap();
-      refreshSelectedWorldTarget();
+      updateActionButtonsForTarget(null);
     });
 
     U.eventBus.on("screen:changed", () => {
@@ -1673,7 +1702,8 @@ window.GrabLabInput = (() => {
     bindRuntimeRenders();
 
     drawMiniMap();
-    clearSelectedWorldTarget();
+    clearInteractionPrompt();
+    updateActionButtonsForTarget(null);
 
     state.initialized = true;
     U.eventBus.emit("input:initialized");
@@ -1692,13 +1722,13 @@ window.GrabLabInput = (() => {
     getPoiDistanceTiles,
     isPoiOnCurrentTile,
     findPoiAtCanvasPoint,
+    isGrabbableResourcePoi,
     handlePrimaryWorldAction,
     handleSecondaryWorldAction,
     setSelectedWorldTarget,
-    clearSelectedWorldTarget,
-    refreshSelectedWorldTarget,
     clearInteractionPrompt,
     capturePoiAnimal,
+    grabPoiResource,
     recruitPoiNpc,
     startPoiCombat,
     performHarvestAction

@@ -17,7 +17,16 @@ window.GrabLabWorld = (() => {
     playerBob: 0,
     hoverPulse: 0,
     visiblePoiRadiusTiles: 5,
+    labelsVisible: true,
     generatedMapKey: null,
+    camera: {
+      centerX: null,
+      centerY: null,
+      zoom: 1,
+      minZoom: 0.55,
+      maxZoom: 1.45,
+      followPlayer: true
+    },
     travel: {
       active: false,
       queuedSteps: [],
@@ -48,537 +57,214 @@ window.GrabLabWorld = (() => {
     return canvas ? canvas.getContext("2d") : null;
   }
 
+  function getTileSize() {
+    return Math.max(24, Math.round(CFG.WORLD.tileSize * Number(state.camera.zoom || 1)));
+  }
+
   function getViewportTileSpan(canvas) {
-    const tileSize = CFG.WORLD.tileSize;
+    const tileSize = getTileSize();
     return {
-      cols: Math.ceil(canvas.width / tileSize),
-      rows: Math.ceil(canvas.height / tileSize)
+      cols: Math.ceil(canvas.width / tileSize) + 1,
+      rows: Math.ceil(canvas.height / tileSize) + 1
     };
   }
 
-  function getCameraOrigin() {
+  function syncCameraToPlayerIfNeeded() {
     const world = S.getWorld();
+    if (state.camera.centerX == null || state.camera.centerY == null || state.camera.followPlayer) {
+      state.camera.centerX = Number(world.currentTileX || 0);
+      state.camera.centerY = Number(world.currentTileY || 0);
+    }
+  }
+
+  function clampCamera() {
+    const canvas = getCanvas();
+    if (!canvas) return;
+
+    const tileSize = getTileSize();
+    const halfCols = Math.max(0.5, (canvas.width / tileSize) / 2);
+    const halfRows = Math.max(0.5, (canvas.height / tileSize) / 2);
+
+    state.camera.centerX = U.clamp(
+      Number(state.camera.centerX ?? S.getWorld().currentTileX),
+      halfCols - 0.5,
+      Math.max(halfCols - 0.5, CFG.WORLD.worldWidthTiles - halfCols + 0.5)
+    );
+
+    state.camera.centerY = U.clamp(
+      Number(state.camera.centerY ?? S.getWorld().currentTileY),
+      halfRows - 0.5,
+      Math.max(halfRows - 0.5, CFG.WORLD.worldHeightTiles - halfRows + 0.5)
+    );
+  }
+
+  function getCameraOrigin() {
     const canvas = getCanvas();
     if (!canvas) return { startX: 0, startY: 0 };
 
-    const { cols, rows } = getViewportTileSpan(canvas);
+    syncCameraToPlayerIfNeeded();
+    clampCamera();
 
-    const halfCols = Math.floor(cols / 2);
-    const halfRows = Math.floor(rows / 2);
+    const tileSize = getTileSize();
+    const halfCols = (canvas.width / tileSize) / 2;
+    const halfRows = (canvas.height / tileSize) / 2;
 
-    const startX = U.clamp(
-      world.currentTileX - halfCols,
-      0,
-      Math.max(0, CFG.WORLD.worldWidthTiles - cols)
-    );
-
-    const startY = U.clamp(
-      world.currentTileY - halfRows,
-      0,
-      Math.max(0, CFG.WORLD.worldHeightTiles - rows)
-    );
-
-    return { startX, startY };
+    return {
+      startX: Number(state.camera.centerX || 0) - halfCols,
+      startY: Number(state.camera.centerY || 0) - halfRows
+    };
   }
 
   function getTileRect(tileX, tileY) {
     const canvas = getCanvas();
-    if (!canvas) return { x: 0, y: 0, size: CFG.WORLD.tileSize };
+    if (!canvas) return { x: 0, y: 0, size: getTileSize() };
 
     const { startX, startY } = getCameraOrigin();
-    const size = CFG.WORLD.tileSize;
+    const size = getTileSize();
 
     return {
-      x: (tileX - startX) * size,
-      y: (tileY - startY) * size,
+      x: (Number(tileX || 0) - startX) * size,
+      y: (Number(tileY || 0) - startY) * size,
       size
     };
   }
 
-  function stableHash(x, y, salt = 0) {
-    let n = Number(x || 0) * 374761393 + Number(y || 0) * 668265263 + Number(salt || 0) * 2147483647;
-    n = (n ^ (n >>> 13)) * 1274126177;
-    n = n ^ (n >>> 16);
-    return Math.abs(n);
-  }
-
-  function stableRand(x, y, salt = 0) {
-    return (stableHash(x, y, salt) % 100000) / 100000;
-  }
-
-  function stablePick(list = [], x = 0, y = 0, salt = 0) {
-    const safe = U.toArray(list);
-    if (!safe.length) return null;
-    return safe[stableHash(x, y, salt) % safe.length];
-  }
-
-  function isPoiResolved(poi) {
-    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden || poi?.defeated);
-  }
-
-  function isSpecialStarterPoi(poi) {
-    if (!poi) return false;
-
-    if (poi.type === "dock") return true;
-    if (poi.speciesId === "marsy_marsupial") return true;
-    if (poi.speciesId === "dock_turtle") return true;
-    if (poi.role === "starter_companion") return true;
-    if (poi.id === "dock_marker") return true;
-
-    return false;
-  }
-
-  function getGeneratedBiomeId(x, y) {
-    const dock = getPrimaryDockNode();
-    const dx = Number(x || 0) - Number(dock?.x ?? 12);
-    const dy = Number(y || 0) - Number(dock?.y ?? 14);
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const noise = stableRand(x, y, 11);
-
-    if (distance <= 1.2) return "field_station_island";
-
-    if ((x + y) % 7 === 0 || noise < 0.16) return "river_channel";
-    if (noise < 0.32) return "wetland";
-    if (noise < 0.48) return "reed_forest";
-    if (noise < 0.62) return "mudflats";
-    if (noise < 0.78) return "fungal_grove";
-    if (noise < 0.89) return "cliffside";
-    return "cavern_entry";
-  }
-
-  function getGeneratedTileType(biomeId) {
-    if (biomeId === "river_channel") return "water";
-    if (biomeId === "mudflats") return "mud";
-    if (biomeId === "cavern_entry") return "cave";
-    return "land";
-  }
-
-  function getGeneratedTileName(biomeId, x, y) {
-    const options = {
-      field_station_island: ["Station Fringe", "Dock Approach", "Field Station Ground"],
-      river_channel: ["River Channel", "Deep Current", "Flooded Cut", "Brownwater Lane"],
-      wetland: ["Wetland Pocket", "Marsh Flat", "Sedge Pool", "Mosquito Choir"],
-      mudflats: ["Mud Spit", "Silt Shelf", "Boggy Flats", "Low Mudbank"],
-      fungal_grove: ["Fungal Grove", "Glowcap Patch", "Spore Hollow", "Bloom Rot"],
-      reed_forest: ["Reed Forest", "Cane Maze", "Whisper Reeds", "Reed Bank"],
-      cliffside: ["Broken Cliff", "Stone Rise", "Old Bluff", "Cracked Ledge"],
-      cavern_entry: ["Cavern Mouth", "Sinkhole Edge", "Dark Hollow", "Root Cave"]
-    };
-
-    return stablePick(options[biomeId] || ["Wild Tile"], x, y, 19);
-  }
-
-  function getAnimalsForBiome(biomeId) {
-    return U.toArray(S.getData()?.animals).filter((animal) => {
-      const habitat = animal?.habitat || "";
-      const tags = U.toArray(animal?.tags);
-      const habitatType = animal?.habitatType || "general";
-
-      if (habitat === biomeId) return true;
-      if (biomeId === "river_channel" && (habitatType === "aquarium" || tags.includes("fish") || tags.includes("aquatic"))) return true;
-      if (biomeId === "wetland" && ["field_station_island", "reed_forest"].includes(habitat)) return true;
-      if (biomeId === "reed_forest" && ["wetland", "field_station_island"].includes(habitat)) return true;
-      if (biomeId === "mudflats" && tags.includes("shell")) return true;
-      if (biomeId === "fungal_grove" && (tags.includes("fungal") || tags.includes("flying"))) return true;
-
-      return false;
-    });
-  }
-
-  function getResourcePoiForBiome(biomeId, x, y) {
-    const plants = U.toArray(S.getData()?.plants).filter((plant) => U.toArray(plant.biomes).includes(biomeId));
-    const plant = stablePick(plants, x, y, 41);
-
-    if (plant) {
-      return {
-        id: `gen_resource_${plant.id}_${x}_${y}`,
-        name: plant.name || U.titleCase(plant.id),
-        shortName: plant.name ? String(plant.name).slice(0, 7) : "Plant",
-        description: plant.description || "A useful wild resource grows here.",
-        type: plant.id?.includes("glow") || plant.id?.includes("spore") ? "fungal_patch" : "resource",
-        plantId: plant.id,
-        tileX: x,
-        tileY: y,
-        localX: 18 + Math.floor(stableRand(x, y, 42) * 34),
-        localY: 18 + Math.floor(stableRand(x, y, 43) * 34)
-      };
-    }
-
-    if (biomeId === "river_channel") {
-      return {
-        id: `gen_fish_spot_${x}_${y}`,
-        name: "Fishing Spot",
-        shortName: "Fish",
-        description: "A promising fishing spot ripples against the current.",
-        type: "fish_spot",
-        tileX: x,
-        tileY: y,
-        localX: 20 + Math.floor(stableRand(x, y, 44) * 36),
-        localY: 18 + Math.floor(stableRand(x, y, 45) * 36)
-      };
-    }
+  function canvasToTile(canvasX, canvasY) {
+    const { startX, startY } = getCameraOrigin();
+    const size = getTileSize();
 
     return {
-      id: `gen_tracks_${x}_${y}`,
-      name: "Animal Tracks",
-      shortName: "Tracks",
-      description: "Fresh tracks suggest wildlife has passed through recently.",
-      type: "tracks",
-      tileX: x,
-      tileY: y,
-      localX: 18 + Math.floor(stableRand(x, y, 46) * 34),
-      localY: 18 + Math.floor(stableRand(x, y, 47) * 34)
+      x: U.clamp(Math.floor(startX + (Number(canvasX || 0) / size)), 0, CFG.WORLD.worldWidthTiles - 1),
+      y: U.clamp(Math.floor(startY + (Number(canvasY || 0) / size)), 0, CFG.WORLD.worldHeightTiles - 1)
     };
   }
 
-  function getAnimalPoiForBiome(biomeId, x, y, index = 0) {
-    const animals = getAnimalsForBiome(biomeId);
-    const animal = stablePick(animals, x, y, 60 + index);
-
-    if (!animal) return null;
-
-    const isFish =
-      animal.habitatType === "aquarium" ||
-      U.toArray(animal.tags).includes("fish") ||
-      U.toArray(animal.tags).includes("aquatic");
-
-    const kind = isFish ? "capturable_animal" : (U.toArray(animal.tags).includes("predator") ? "wild_animal" : "capturable_animal");
-
-    return {
-      id: `gen_animal_${animal.id}_${x}_${y}_${index}`,
-      name: animal.name || U.titleCase(animal.id),
-      shortName: animal.shortName || String(animal.name || animal.id || "Animal").slice(0, 8),
-      description: animal.description || "A wild creature moves through this tile.",
-      type: kind,
-      speciesId: animal.id,
-      capturable: true,
-      recruitable: false,
-      tileX: x,
-      tileY: y,
-      localX: 16 + Math.floor(stableRand(x, y, 61 + index) * 40),
-      localY: 16 + Math.floor(stableRand(x, y, 62 + index) * 40)
-    };
+  function panCameraBy(deltaX = 0, deltaY = 0, options = {}) {
+    syncCameraToPlayerIfNeeded();
+    state.camera.followPlayer = Boolean(options.followPlayer);
+    state.camera.centerX = Number(state.camera.centerX || 0) + Number(deltaX || 0);
+    state.camera.centerY = Number(state.camera.centerY || 0) + Number(deltaY || 0);
+    clampCamera();
+    drawWorld();
+    return { x: state.camera.centerX, y: state.camera.centerY };
   }
 
-  function getEncounterPoiForBiome(biomeId, x, y) {
-    const encounters = U.toArray(S.getData()?.encounters).filter((encounter) => {
-      return U.toArray(encounter?.biomes).includes(biomeId);
-    });
-
-    const encounter = stablePick(encounters, x, y, 80);
-    if (!encounter) return null;
-
-    if (encounter.type === "combat") {
-      return {
-        id: `gen_encounter_${encounter.id}_${x}_${y}`,
-        name: encounter.name || "Hostile Encounter",
-        shortName: "Fight",
-        description: encounter.description || "Something hostile is moving here.",
-        type: "combat",
-        hostile: true,
-        encounterId: encounter.id,
-        tileX: x,
-        tileY: y,
-        localX: 18 + Math.floor(stableRand(x, y, 81) * 34),
-        localY: 18 + Math.floor(stableRand(x, y, 82) * 34)
-      };
-    }
-
-    if (encounter.type === "loot") {
-      return {
-        id: `gen_loot_${encounter.id}_${x}_${y}`,
-        name: encounter.name || "Lost Cache",
-        shortName: "Cache",
-        description: encounter.description || "A small stash may be hidden here.",
-        type: "loot",
-        lootTableId: encounter.lootTableId || "starter_cache",
-        tileX: x,
-        tileY: y,
-        localX: 18 + Math.floor(stableRand(x, y, 83) * 34),
-        localY: 18 + Math.floor(stableRand(x, y, 84) * 34)
-      };
-    }
-
-    return {
-      id: `gen_event_${encounter.id}_${x}_${y}`,
-      name: encounter.name || "Odd Sign",
-      shortName: "Event",
-      description: encounter.description || "Something unusual happened here.",
-      type: encounter.type === "hazard" ? "fungal_patch" : "tracks",
-      encounterId: encounter.id,
-      tileX: x,
-      tileY: y,
-      localX: 18 + Math.floor(stableRand(x, y, 85) * 34),
-      localY: 18 + Math.floor(stableRand(x, y, 86) * 34)
-    };
+  function panCameraPixels(pixelDx = 0, pixelDy = 0) {
+    const size = getTileSize();
+    return panCameraBy(-Number(pixelDx || 0) / size, -Number(pixelDy || 0) / size, { followPlayer: false });
   }
 
-  function createGeneratedTile(x, y) {
-    const biomeId = getGeneratedBiomeId(x, y);
-    const tile = {
-      id: `tile_${x}_${y}`,
-      x,
-      y,
-      biomeId,
-      type: getGeneratedTileType(biomeId),
-      name: getGeneratedTileName(biomeId, x, y),
-      generated: true,
-      pointsOfInterest: []
-    };
-
-    const poiRoll = stableRand(x, y, 100);
-    const animalRoll = stableRand(x, y, 101);
-    const eventRoll = stableRand(x, y, 102);
-
-    if (poiRoll < 0.58) {
-      tile.pointsOfInterest.push(getResourcePoiForBiome(biomeId, x, y));
-    }
-
-    if (animalRoll < 0.44) {
-      const animalPoi = getAnimalPoiForBiome(biomeId, x, y, 0);
-      if (animalPoi) tile.pointsOfInterest.push(animalPoi);
-    }
-
-    if (animalRoll > 0.82) {
-      const animalPoi = getAnimalPoiForBiome(biomeId, x, y, 1);
-      if (animalPoi) tile.pointsOfInterest.push(animalPoi);
-    }
-
-    if (eventRoll < 0.22) {
-      const encounterPoi = getEncounterPoiForBiome(biomeId, x, y);
-      if (encounterPoi) tile.pointsOfInterest.push(encounterPoi);
-    }
-
-    tile.pointsOfInterest = tile.pointsOfInterest.filter(Boolean);
-
-    return tile;
-  }
-
-  function getPrimaryDockNode() {
-    return (
-      S.getMapNode("field_station_dock") ||
-      U.toArray(S.getData()?.map?.nodes).find((node) => node.id?.includes("dock")) ||
-      { id: "field_station_dock", name: "Field Station Dock", shortName: "Dock", x: 12, y: 14 }
+  function zoomCamera(delta = 0) {
+    const next = U.clamp(
+      Number(state.camera.zoom || 1) + Number(delta || 0),
+      Number(state.camera.minZoom || 0.55),
+      Number(state.camera.maxZoom || 1.45)
     );
+
+    state.camera.zoom = Math.round(next * 100) / 100;
+    state.camera.followPlayer = false;
+    clampCamera();
+    drawWorld();
+    return state.camera.zoom;
   }
 
-  function getBaseExpansionTiles() {
-    const dock = getPrimaryDockNode();
-    const dockX = Number(dock.x ?? 12);
-    const dockY = Number(dock.y ?? 14);
-    const base = S.getBase();
-    const structures = U.toArray(base?.structures);
-    const habitats = U.toArray(base?.habitats);
-
-    const offsets = [
-      { x: 0, y: 0 },
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-      { x: 0, y: -1 },
-      { x: 1, y: 1 },
-      { x: -1, y: 1 },
-      { x: 1, y: -1 },
-      { x: -1, y: -1 },
-      { x: 2, y: 0 },
-      { x: 0, y: 2 },
-      { x: -2, y: 0 },
-      { x: 0, y: -2 }
-    ];
-
-    const entries = [
-      {
-        id: "dock_core",
-        structureId: "dock_core",
-        name: "Dock",
-        category: "dock",
-        tileX: dockX,
-        tileY: dockY
-      },
-      ...structures.map((entry) => ({
-        ...entry,
-        category: S.getStructureDef(entry.structureId)?.category || "structure"
-      })),
-      ...habitats.map((entry) => ({
-        ...entry,
-        structureId: entry.structureId || entry.habitatType || "habitat",
-        name: entry.name || U.titleCase(entry.habitatType || "Habitat"),
-        category: "habitat"
-      }))
-    ];
-
-    return entries.map((entry, index) => {
-      const offset = offsets[index % offsets.length];
-      return {
-        ...entry,
-        tileX: dockX + offset.x,
-        tileY: dockY + offset.y,
-        offsetIndex: index
-      };
-    });
+  function recenterCameraOnPlayer() {
+    const world = S.getWorld();
+    state.camera.centerX = Number(world.currentTileX || 0);
+    state.camera.centerY = Number(world.currentTileY || 0);
+    state.camera.followPlayer = true;
+    clampCamera();
+    drawWorld();
+    return { x: state.camera.centerX, y: state.camera.centerY };
   }
 
-  function getBaseExpansionCoordMap() {
-    const map = new Map();
-
-    getBaseExpansionTiles().forEach((entry) => {
-      map.set(`${Number(entry.tileX)},${Number(entry.tileY)}`, entry);
-    });
-
-    return map;
+  function setMapLabelsVisible(value = true) {
+    state.labelsVisible = Boolean(value);
+    drawWorld();
+    return state.labelsVisible;
   }
 
-  function ensureDockMarkerOnTile(tile, dockX, dockY) {
-    tile.pointsOfInterest = U.toArray(tile.pointsOfInterest);
+  function toggleMapLabels() {
+    return setMapLabelsVisible(!state.labelsVisible);
+  }
 
-    if (!tile.pointsOfInterest.some((poi) => poi.type === "dock" || poi.id === "dock_marker")) {
-      tile.pointsOfInterest.unshift({
-        id: "dock_marker",
-        name: "Dock",
-        shortName: "Dock",
-        description: "Your river boat is tied up here, somehow still floating.",
-        type: "dock",
-        tileX: dockX,
-        tileY: dockY,
-        localX: 33,
-        localY: 45
-      });
+  function getControlledAvatar() {
+    const activeId = S.getRuntime()?.activeAvatarId || "player";
+    if (activeId === "player") {
+      return { id: "player", type: "player", name: S.getPlayer()?.name || "Ranger", traits: U.toArray(S.getPlayer()?.traits), mutations: U.toArray(S.getPlayer()?.mutations) };
     }
 
-    return tile;
+    const companion = U.toArray(S.getParty()?.active).find((entry) => entry?.id === activeId);
+    if (companion) {
+      return { ...companion, type: "companion", traits: U.toArray(companion.traits), mutations: U.toArray(companion.mutations) };
+    }
+
+    return { id: "player", type: "player", name: S.getPlayer()?.name || "Ranger", traits: U.toArray(S.getPlayer()?.traits), mutations: U.toArray(S.getPlayer()?.mutations) };
   }
 
-  function sanitizeBaseExpansionPoisInMap(map) {
-    const expansionMap = getBaseExpansionCoordMap();
-
-    map.tiles = U.toArray(map.tiles).map((tile) => {
-      const key = `${Number(tile.x)},${Number(tile.y)}`;
-      const expansion = expansionMap.get(key);
-
-      if (!expansion) return tile;
-
-      const nextTile = {
-        ...tile,
-        biomeId: "field_station_island",
-        type: "land",
-        name: expansion.offsetIndex === 0 ? (tile.name || "Field Station Dock") : (expansion.name || "Base Expansion"),
-        pointsOfInterest: []
-      };
-
-      const pois = U.toArray(tile.pointsOfInterest);
-
-      if (expansion.offsetIndex === 0) {
-        nextTile.pointsOfInterest = pois.filter((poi) => {
-          if (isPoiResolved(poi)) return false;
-          return isSpecialStarterPoi(poi);
-        });
-
-        const dock = getPrimaryDockNode();
-        ensureDockMarkerOnTile(nextTile, Number(dock.x ?? 12), Number(dock.y ?? 14));
-      }
-
-      return nextTile;
-    });
-
-    return map;
+  function getControlledTraits() {
+    const avatar = getControlledAvatar();
+    return new Set([...U.toArray(avatar.traits), ...U.toArray(avatar.mutations)].map((x) => String(x).toLowerCase()));
   }
 
-  function clearBaseExpansionPois() {
-    const map = U.deepClone(S.getData()?.map || { nodes: [], tiles: [] });
-    if (!Array.isArray(map.tiles)) return false;
-
-    const before = JSON.stringify(map.tiles.map((tile) => ({
-      x: tile.x,
-      y: tile.y,
-      pointsOfInterest: U.toArray(tile.pointsOfInterest).map((poi) => poi.id || poi.name || poi.type)
-    })));
-
-    sanitizeBaseExpansionPoisInMap(map);
-
-    const after = JSON.stringify(map.tiles.map((tile) => ({
-      x: tile.x,
-      y: tile.y,
-      pointsOfInterest: U.toArray(tile.pointsOfInterest).map((poi) => poi.id || poi.name || poi.type)
-    })));
-
-    if (before !== after) {
-      S.replaceDataBucket("map", map);
-      return true;
-    }
-
-    return false;
+  function hasAnyTrait(traits, names = []) {
+    return U.toArray(names).some((name) => traits.has(String(name).toLowerCase()));
   }
 
-  function ensureExpandedMapData() {
-    const map = U.deepClone(S.getData()?.map || { nodes: [], tiles: [] });
-    const nodes = U.toArray(map.nodes);
-    const tiles = U.toArray(map.tiles);
-    const width = Number(CFG.WORLD.worldWidthTiles || 30);
-    const height = Number(CFG.WORLD.worldHeightTiles || 30);
-    const key = `${width}x${height}_${tiles.length}_${nodes.length}`;
+  function isBoatDeployed() {
+    return Boolean(S.getBoat()?.deployed || S.getBoat()?.isDeployed);
+  }
 
-    if (state.generatedMapKey === key && S.getMapTile(width - 1, height - 1)) {
-      clearBaseExpansionPois();
-      return false;
+  function toggleBoatDeployed() {
+    const next = !isBoatDeployed();
+    S.updateBoat({ deployed: next, isDeployed: next });
+    S.addToast(next ? "Boat deployed for waterways." : "Boat packed up.", next ? "success" : "info");
+    S.logActivity(next ? "Mudskipper deployed. Waterway travel is available from shore or dock-adjacent tiles." : "Mudskipper packed up and ready to carry overland.", next ? "success" : "info");
+    drawWorld();
+    return next;
+  }
+
+  function getTileAccessRequirement(tileDef = {}) {
+    const biomeId = tileDef?.biomeId || "";
+    const type = tileDef?.type || "land";
+    const access = String(tileDef?.access || tileDef?.accessType || "").toLowerCase();
+
+    if (access) return access;
+    if (type === "deep_water" || biomeId === "deep_water") return "aquatic";
+    if (type === "water" || biomeId === "river_channel") return "water";
+    if (type === "canopy" || biomeId === "canopy") return "flight";
+    if (type === "highland" || biomeId === "cliffside") return "climb_or_flight";
+    if (type === "cave" || biomeId === "cavern_entry") return "claws_or_tool";
+    return "open";
+  }
+
+  function canControlledAvatarAccessTile(tileDef = {}) {
+    const requirement = getTileAccessRequirement(tileDef);
+    const traits = getControlledTraits();
+
+    if (requirement === "open") return { ok: true };
+    if (requirement === "water") {
+      if (isBoatDeployed() || hasAnyTrait(traits, ["swim", "gills", "fins", "wet_skin"])) return { ok: true };
+      return { ok: false, reason: "Waterway travel needs the boat deployed or a controlled creature with Swim, Gills, Fins, or Wet Skin." };
+    }
+    if (requirement === "aquatic") {
+      if (hasAnyTrait(traits, ["gills", "fins", "swim"])) return { ok: true };
+      return { ok: false, reason: "Deep water needs a controlled creature with Gills, Fins, or Swim." };
+    }
+    if (requirement === "flight") {
+      if (hasAnyTrait(traits, ["flight", "wings", "glide"])) return { ok: true };
+      return { ok: false, reason: "This high/canopy tile needs Flight or Wings." };
+    }
+    if (requirement === "climb_or_flight") {
+      if (hasAnyTrait(traits, ["flight", "wings", "claws", "jump"])) return { ok: true };
+      return { ok: false, reason: "This rough highland needs Flight, Wings, Claws, or Jump." };
+    }
+    if (requirement === "claws_or_tool") {
+      if (hasAnyTrait(traits, ["claws", "flight"]) || S.hasItem?.("player", "field_knife", 1)) return { ok: true };
+      return { ok: false, reason: "This tile needs Claws, Flight, or a useful field tool." };
     }
 
-    const byKey = new Map();
-    tiles.forEach((tile) => {
-      byKey.set(`${Number(tile.x)},${Number(tile.y)}`, {
-        ...tile,
-        pointsOfInterest: U.toArray(tile.pointsOfInterest)
-      });
-    });
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const tileKey = `${x},${y}`;
-        if (!byKey.has(tileKey)) {
-          byKey.set(tileKey, createGeneratedTile(x, y));
-        }
-      }
-    }
-
-    const dock = getPrimaryDockNode();
-
-    if (!nodes.some((node) => node.id === "field_station_dock")) {
-      nodes.unshift({
-        id: "field_station_dock",
-        name: "Field Station Dock",
-        shortName: "Dock",
-        x: Number(dock.x ?? 12),
-        y: Number(dock.y ?? 14)
-      });
-    }
-
-    const dockKey = `${Number(dock.x ?? 12)},${Number(dock.y ?? 14)}`;
-    const dockTile = byKey.get(dockKey) || createGeneratedTile(Number(dock.x ?? 12), Number(dock.y ?? 14));
-
-    dockTile.biomeId = "field_station_island";
-    dockTile.type = "land";
-    dockTile.name = dockTile.name || "Field Station Alpha";
-    dockTile.pointsOfInterest = U.toArray(dockTile.pointsOfInterest).filter((poi) => {
-      if (isPoiResolved(poi)) return false;
-      return isSpecialStarterPoi(poi);
-    });
-
-    ensureDockMarkerOnTile(dockTile, Number(dock.x ?? 12), Number(dock.y ?? 14));
-
-    byKey.set(dockKey, dockTile);
-
-    map.nodes = nodes;
-    map.tiles = [...byKey.values()].sort((a, b) => {
-      const yd = Number(a.y) - Number(b.y);
-      if (yd !== 0) return yd;
-      return Number(a.x) - Number(b.x);
-    });
-
-    sanitizeBaseExpansionPoisInMap(map);
-
-    S.replaceDataBucket("map", map);
-    state.generatedMapKey = `${width}x${height}_${map.tiles.length}_${map.nodes.length}`;
-
-    return true;
+    return { ok: true };
   }
 
   function buildTravelPath(fromX, fromY, toX, toY) {
@@ -643,6 +329,16 @@ window.GrabLabWorld = (() => {
     const world = S.getWorld();
     const tx = U.clamp(Number(tileX || 0), 0, CFG.WORLD.worldWidthTiles - 1);
     const ty = U.clamp(Number(tileY || 0), 0, CFG.WORLD.worldHeightTiles - 1);
+    const targetTile = S.getMapTile(tx, ty) || {};
+    const access = canControlledAvatarAccessTile(targetTile);
+
+    if (!access.ok) {
+      S.addToast(access.reason || "That tile is unreachable with the current controlled party member.", "warning");
+      S.logActivity(access.reason || "Tile blocked by terrain traits.", "warning");
+      stopTravel();
+      return false;
+    }
+
     const path = buildTravelPath(world.currentTileX, world.currentTileY, tx, ty);
 
     if (!path.length) {
@@ -650,17 +346,31 @@ window.GrabLabWorld = (() => {
       return false;
     }
 
+    const blockedStep = path.find((step) => {
+      const tile = S.getMapTile(step.x, step.y) || {};
+      return !canControlledAvatarAccessTile(tile).ok;
+    });
+
+    if (blockedStep) {
+      const tile = S.getMapTile(blockedStep.x, blockedStep.y) || {};
+      const stepAccess = canControlledAvatarAccessTile(tile);
+      S.addToast(stepAccess.reason || "The path crosses unreachable terrain.", "warning");
+      S.logActivity(`Route blocked at ${tile.name || `${blockedStep.x}, ${blockedStep.y}`}. ${stepAccess.reason || "Unreachable."}`, "warning");
+      stopTravel();
+      return false;
+    }
+
     state.travel.queuedSteps = path;
     state.travel.destination = { x: tx, y: ty };
-    state.travel.destinationBiomeId = biomeId || S.getMapTile(tx, ty)?.biomeId || world.currentBiomeId;
+    state.travel.destinationBiomeId = biomeId || targetTile?.biomeId || world.currentBiomeId;
     state.travel.active = false;
     state.travel.from = null;
     state.travel.to = null;
     state.travel.progressMs = 0;
 
-    const tileDef = S.getMapTile(tx, ty);
-    const label = tileDef?.name || `${tx}, ${ty}`;
-    S.logActivity(`Traveling to ${label}.`, "info");
+    const avatar = getControlledAvatar();
+    const label = targetTile?.name || `${tx}, ${ty}`;
+    S.logActivity(`${avatar.name || "Controlled party member"} traveling to ${label}.`, "info");
     return beginNextTravelStep();
   }
 
@@ -690,6 +400,8 @@ window.GrabLabWorld = (() => {
     const biomeId = tileDef?.biomeId || world.currentBiomeId;
 
     switch (biomeId) {
+      case "deep_water":
+        return "#1d415f";
       case "river_channel":
         return "#335e73";
       case "wetland":
@@ -700,6 +412,8 @@ window.GrabLabWorld = (() => {
         return "#5a3f5e";
       case "reed_forest":
         return "#4f6f3f";
+      case "canopy":
+        return "#315b35";
       case "cliffside":
         return "#4b4d52";
       case "cavern_entry":
@@ -714,6 +428,8 @@ window.GrabLabWorld = (() => {
     const biomeId = tileDef?.biomeId || world.currentBiomeId;
 
     switch (biomeId) {
+      case "deep_water":
+        return "#4c9fd1";
       case "river_channel":
         return "#6aa7c8";
       case "wetland":
@@ -724,6 +440,8 @@ window.GrabLabWorld = (() => {
         return "#bb7fd1";
       case "reed_forest":
         return "#97be5a";
+      case "canopy":
+        return "#9ee283";
       case "cliffside":
         return "#8f949d";
       case "cavern_entry":
@@ -737,19 +455,12 @@ window.GrabLabWorld = (() => {
   function getFogAlpha(tileX, tileY) {
     if (!CFG.WORLD.fogOfWarEnabled) return 0;
     if (S.isTileRevealed(tileX, tileY)) return 0;
-
-    const world = S.getWorld();
-    const distance = Math.max(
-      Math.abs(Number(tileX) - Number(world.currentTileX || 0)),
-      Math.abs(Number(tileY) - Number(world.currentTileY || 0))
-    );
-
-    if (distance <= state.visiblePoiRadiusTiles) return 0.22;
     return 0.68;
   }
 
   function getTileType(tileDef) {
     if (tileDef?.type) return tileDef.type;
+    if (tileDef?.biomeId === "deep_water") return "deep_water";
     if (tileDef?.biomeId === "river_channel") return "water";
     return "land";
   }
@@ -760,7 +471,7 @@ window.GrabLabWorld = (() => {
     ctx.arcTo(x + w, y, x + w, y + h, r);
     ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + r, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
 
@@ -788,7 +499,7 @@ window.GrabLabWorld = (() => {
 
     const tileType = getTileType(tileDef);
 
-    if (tileType === "water") {
+    if (tileType === "water" || tileType === "deep_water") {
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 2;
 
@@ -808,9 +519,17 @@ window.GrabLabWorld = (() => {
       }
     }
 
-    if (tileDef?.generated) {
-      ctx.fillStyle = "rgba(255,255,255,0.035)";
-      ctx.fillRect(x + 1, y + 1, size - 2, 3);
+    if (tileType === "deep_water") {
+      ctx.fillStyle = "rgba(20, 50, 80, 0.28)";
+      ctx.fillRect(x + size * 0.12, y + size * 0.12, size * 0.76, size * 0.76);
+    }
+
+    if (tileType === "canopy" || tileDef?.biomeId === "canopy") {
+      ctx.strokeStyle = "rgba(205, 255, 180, 0.18)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + size * 0.5, y + size * 0.5, size * 0.32, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     if (tileDef?.cleared || S.isTileCleared(tileX, tileY)) {
@@ -833,11 +552,13 @@ window.GrabLabWorld = (() => {
 
     const { startX, startY } = getCameraOrigin();
     const { cols, rows } = getViewportTileSpan(canvas);
+    const firstTileX = Math.max(0, Math.floor(startX));
+    const firstTileY = Math.max(0, Math.floor(startY));
 
     for (let row = 0; row <= rows; row += 1) {
       for (let col = 0; col <= cols; col += 1) {
-        const tileX = startX + col;
-        const tileY = startY + row;
+        const tileX = firstTileX + col;
+        const tileY = firstTileY + row;
 
         if (tileX >= CFG.WORLD.worldWidthTiles || tileY >= CFG.WORLD.worldHeightTiles) continue;
         drawTileBackground(ctx, tileX, tileY, world);
@@ -849,130 +570,46 @@ window.GrabLabWorld = (() => {
 
     for (let row = 0; row <= rows; row += 1) {
       ctx.beginPath();
-      ctx.moveTo(0, row * CFG.WORLD.tileSize);
-      ctx.lineTo(canvas.width, row * CFG.WORLD.tileSize);
+      ctx.moveTo(0, row * getTileSize());
+      ctx.lineTo(canvas.width, row * getTileSize());
       ctx.stroke();
     }
 
     for (let col = 0; col <= cols; col += 1) {
       ctx.beginPath();
-      ctx.moveTo(col * CFG.WORLD.tileSize, 0);
-      ctx.lineTo(col * CFG.WORLD.tileSize, canvas.height);
+      ctx.moveTo(col * getTileSize(), 0);
+      ctx.lineTo(col * getTileSize(), canvas.height);
       ctx.stroke();
     }
-  }
-
-  function drawStructureGlyph(ctx, entry, cx, cy, size) {
-    const id = String(entry.structureId || entry.id || "").toLowerCase();
-    const category = String(entry.category || "").toLowerCase();
-
-    ctx.save();
-    ctx.lineWidth = 2;
-
-    if (id.includes("aquarium") || id.includes("tank") || id.includes("water")) {
-      ctx.fillStyle = "#77c8e8";
-      ctx.strokeStyle = "#d9f6ff";
-      ctx.fillRect(cx - size * 0.22, cy - size * 0.14, size * 0.44, size * 0.28);
-      ctx.strokeRect(cx - size * 0.22, cy - size * 0.14, size * 0.44, size * 0.28);
-      ctx.beginPath();
-      ctx.arc(cx, cy, size * 0.06, 0, Math.PI * 2);
-      ctx.fillStyle = "#ecfbff";
-      ctx.fill();
-    } else if (id.includes("pen") || category.includes("habitat")) {
-      ctx.strokeStyle = "#f6df9f";
-      ctx.strokeRect(cx - size * 0.23, cy - size * 0.2, size * 0.46, size * 0.4);
-      ctx.beginPath();
-      ctx.moveTo(cx - size * 0.23, cy);
-      ctx.lineTo(cx + size * 0.23, cy);
-      ctx.moveTo(cx, cy - size * 0.2);
-      ctx.lineTo(cx, cy + size * 0.2);
-      ctx.stroke();
-    } else if (id.includes("stove")) {
-      ctx.fillStyle = "#8c8c86";
-      ctx.fillRect(cx - size * 0.18, cy - size * 0.16, size * 0.36, size * 0.32);
-      ctx.fillStyle = "#ff9f4d";
-      ctx.beginPath();
-      ctx.arc(cx, cy - size * 0.03, size * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (id.includes("workbench")) {
-      ctx.fillStyle = "#9b6c43";
-      ctx.fillRect(cx - size * 0.25, cy - size * 0.08, size * 0.5, size * 0.16);
-      ctx.fillRect(cx - size * 0.2, cy + size * 0.08, size * 0.05, size * 0.2);
-      ctx.fillRect(cx + size * 0.15, cy + size * 0.08, size * 0.05, size * 0.2);
-    } else if (id.includes("storage") || id.includes("crate")) {
-      ctx.fillStyle = "#bd8c59";
-      ctx.fillRect(cx - size * 0.18, cy - size * 0.18, size * 0.36, size * 0.36);
-      ctx.strokeStyle = "#ffedc2";
-      ctx.strokeRect(cx - size * 0.18, cy - size * 0.18, size * 0.36, size * 0.36);
-      ctx.beginPath();
-      ctx.moveTo(cx - size * 0.18, cy);
-      ctx.lineTo(cx + size * 0.18, cy);
-      ctx.stroke();
-    } else if (id.includes("dock")) {
-      drawDockGlyph(ctx, cx, cy);
-    } else {
-      ctx.fillStyle = "#d7f0c6";
-      ctx.fillRect(cx - size * 0.16, cy - size * 0.16, size * 0.32, size * 0.32);
-      ctx.fillStyle = "#6f8d62";
-      ctx.fillRect(cx - size * 0.12, cy - size * 0.26, size * 0.24, size * 0.12);
-    }
-
-    ctx.restore();
   }
 
   function drawFieldStationDetails(ctx, world) {
-    const dock = getPrimaryDockNode();
-    if (!dock) return;
+    const currentTile = S.getCurrentMapTile();
+    const canvas = getCanvas();
+    if (!canvas) return;
 
-    const expansions = getBaseExpansionTiles();
+    if (world.currentBiomeId !== "field_station_island" && currentTile?.biomeId !== "field_station_island") {
+      return;
+    }
 
-    expansions.forEach((entry) => {
-      const tileX = Number(entry.tileX);
-      const tileY = Number(entry.tileY);
+    const dockTile = S.getMapNode(world.currentMapNodeId || "field_station_dock");
+    if (!dockTile) return;
 
-      if (tileX < 0 || tileY < 0 || tileX >= CFG.WORLD.worldWidthTiles || tileY >= CFG.WORLD.worldHeightTiles) return;
+    const tileX = Number(dockTile.x ?? world.currentTileX);
+    const tileY = Number(dockTile.y ?? world.currentTileY);
+    const { x, y, size } = getTileRect(tileX, tileY);
 
-      const { x, y, size } = getTileRect(tileX, tileY);
+    ctx.fillStyle = "#7b6044";
+    ctx.fillRect(x + size * 0.16, y + size * 0.6, size * 0.68, size * 0.16);
 
-      if (x + size < 0 || y + size < 0 || x > getCanvas().width || y > getCanvas().height) return;
+    ctx.fillStyle = "#b8d6c0";
+    ctx.fillRect(x + size * 0.28, y + size * 0.18, size * 0.42, size * 0.24);
+    ctx.fillStyle = "#617f64";
+    ctx.fillRect(x + size * 0.22, y + size * 0.1, size * 0.54, size * 0.12);
 
-      ctx.save();
-
-      ctx.fillStyle = entry.offsetIndex === 0 ? "rgba(240, 196, 161, 0.28)" : "rgba(130, 209, 115, 0.18)";
-      ctx.fillRect(x + 4, y + 4, size - 8, size - 8);
-
-      ctx.strokeStyle = entry.offsetIndex === 0 ? "rgba(255, 235, 205, 0.55)" : "rgba(185, 240, 160, 0.38)";
-      ctx.lineWidth = 2;
-      drawRoundedRect(ctx, x + 5, y + 5, size - 10, size - 10, 8);
-      ctx.stroke();
-
-      const cx = x + size * 0.5;
-      const cy = y + size * 0.48;
-
-      drawStructureGlyph(ctx, entry, cx, cy, size);
-
-      const label = entry.name || getStructureLabel(entry.structureId);
-      const short = String(label).length > 10 ? String(label).slice(0, 10) : String(label);
-      const labelWidth = Math.max(46, Math.min(78, short.length * 7 + 10));
-
-      ctx.fillStyle = "rgba(14, 20, 16, 0.82)";
-      ctx.fillRect(cx - labelWidth / 2, y + size - 20, labelWidth, 15);
-
-      ctx.fillStyle = "#edf6ef";
-      ctx.font = "11px Trebuchet MS, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(short, cx, y + size - 9);
-
-      ctx.restore();
-    });
-
-    void world;
-  }
-
-  function getStructureLabel(structureId) {
-    if (!structureId) return "Base";
-    const def = S.getStructureDef?.(structureId);
-    return def?.name || U.titleCase(String(structureId).replaceAll("_", " "));
+    ctx.fillStyle = "#8aa286";
+    ctx.fillRect(x + size * 0.12, y + size * 0.2, size * 0.08, size * 0.22);
+    ctx.fillRect(x + size * 0.74, y + size * 0.2, size * 0.08, size * 0.22);
   }
 
   function getPoiRenderStyle(poi) {
@@ -1019,17 +656,6 @@ window.GrabLabWorld = (() => {
           labelBg: "rgba(22, 28, 10, 0.86)",
           radius: 8,
           kind: "resource"
-        };
-      case "combat":
-      case "hostile":
-      case "enemy":
-      case "fungal_enemy":
-        return {
-          fill: "#f76b6b",
-          stroke: "rgba(42, 8, 8, 0.88)",
-          labelBg: "rgba(46, 10, 10, 0.88)",
-          radius: 10,
-          kind: "fungus"
         };
       case "dock":
         return {
@@ -1164,6 +790,10 @@ window.GrabLabWorld = (() => {
     }
   }
 
+  function isPoiResolved(poi) {
+    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden || poi?.defeated);
+  }
+
   function normalizePoiTile(poi, tileX, tileY) {
     return {
       ...poi,
@@ -1176,51 +806,26 @@ window.GrabLabWorld = (() => {
     const world = S.getWorld();
     const out = [];
     const seen = new Set();
-    const expansionMap = getBaseExpansionCoordMap();
+    const r = Math.max(0, Number(radius || 0));
 
-    const pushPoi = (poi, tileX, tileY, force = false) => {
-      if (!poi || isPoiResolved(poi)) return;
-
-      const coordKey = `${Number(tileX)},${Number(tileY)}`;
-      const expansion = expansionMap.get(coordKey);
-
-      if (expansion && expansion.offsetIndex !== 0) return;
-      if (expansion && expansion.offsetIndex === 0 && !isSpecialStarterPoi(poi)) return;
-
-      const normalized = normalizePoiTile(poi, tileX, tileY);
-      const id = normalized.id || `${normalized.type}_${tileX}_${tileY}_${out.length}`;
-      if (seen.has(id)) return;
-
-      const distance = Math.max(
-        Math.abs(Number(normalized.tileX) - Number(world.currentTileX || 0)),
-        Math.abs(Number(normalized.tileY) - Number(world.currentTileY || 0))
-      );
-
-      if (!force && distance > radius) return;
-
-      seen.add(id);
-      out.push({
-        ...normalized,
-        distanceTiles: distance
-      });
-    };
-
-    for (let y = Number(world.currentTileY || 0) - radius; y <= Number(world.currentTileY || 0) + radius; y += 1) {
-      for (let x = Number(world.currentTileX || 0) - radius; x <= Number(world.currentTileX || 0) + radius; x += 1) {
+    for (let y = Number(world.currentTileY || 0) - r; y <= Number(world.currentTileY || 0) + r; y += 1) {
+      for (let x = Number(world.currentTileX || 0) - r; x <= Number(world.currentTileX || 0) + r; x += 1) {
         if (x < 0 || y < 0 || x >= CFG.WORLD.worldWidthTiles || y >= CFG.WORLD.worldHeightTiles) continue;
 
+        const dist = Math.max(Math.abs(x - Number(world.currentTileX || 0)), Math.abs(y - Number(world.currentTileY || 0)));
+        if (dist > r) continue;
+
         const tile = S.getMapTile(x, y);
-        U.toArray(tile?.pointsOfInterest).forEach((poi) => pushPoi(poi, x, y, false));
+        U.toArray(tile?.pointsOfInterest).forEach((poi) => {
+          if (!poi || isPoiResolved(poi)) return;
+          const normalized = normalizePoiTile(poi, x, y);
+          const id = normalized.id || `${normalized.type}_${x}_${y}_${out.length}`;
+          if (seen.has(id)) return;
+          seen.add(id);
+          out.push({ ...normalized, distanceTiles: dist });
+        });
       }
     }
-
-    U.toArray(S.getData()?.map?.tiles).forEach((tile) => {
-      U.toArray(tile.pointsOfInterest).forEach((poi) => {
-        if (poi?.type === "dock") {
-          pushPoi(poi, Number(tile.x), Number(tile.y), true);
-        }
-      });
-    });
 
     return out;
   }
@@ -1233,7 +838,8 @@ window.GrabLabWorld = (() => {
     const tileY = Number(poi.tileY ?? world.currentTileY);
     const rect = getTileRect(tileX, tileY);
 
-    if (rect.x + rect.size < 0 || rect.y + rect.size < 0 || rect.x > getCanvas().width || rect.y > getCanvas().height) {
+    const canvas = getCanvas();
+    if (canvas && (rect.x + rect.size < -32 || rect.y + rect.size < -32 || rect.x > canvas.width + 32 || rect.y > canvas.height + 32)) {
       return;
     }
 
@@ -1251,7 +857,7 @@ window.GrabLabWorld = (() => {
     ctx.save();
 
     if (distance > 0 && poi.type !== "dock") {
-      ctx.globalAlpha = distance > 3 ? 0.58 : 0.76;
+      ctx.globalAlpha = distance > 3 ? 0.56 : 0.76;
     }
 
     ctx.fillStyle = style.fill;
@@ -1273,30 +879,30 @@ window.GrabLabWorld = (() => {
       ctx.stroke();
     }
 
-    const label = poi.shortName || poi.name || "POI";
-    const labelWidth = Math.max(42, Math.min(82, String(label).length * 7 + 10));
+    if (state.labelsVisible) {
+      const label = poi.shortName || poi.name || "POI";
+      const labelWidth = Math.max(42, Math.min(82, String(label).length * 7 + 10));
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = style.labelBg;
+      ctx.fillRect(px - labelWidth / 2, py - 30, labelWidth, 16);
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = style.labelBg;
-    ctx.fillRect(px - labelWidth / 2, py - 30, labelWidth, 16);
+      ctx.fillStyle = "#edf6ef";
+      ctx.font = "12px Trebuchet MS, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(label, px, py - 18);
 
-    ctx.fillStyle = "#edf6ef";
-    ctx.font = "12px Trebuchet MS, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(label, px, py - 18);
-
-    if (distance > 0 && poi.type !== "dock") {
-      ctx.fillStyle = "rgba(237,246,239,0.72)";
-      ctx.font = "10px Trebuchet MS, sans-serif";
-      ctx.fillText(`${distance}t`, px, py + 22);
+      if (distance > 0 && poi.type !== "dock") {
+        ctx.fillStyle = "rgba(237,246,239,0.72)";
+        ctx.font = "10px Trebuchet MS, sans-serif";
+        ctx.fillText(`${distance}t`, px, py + 22);
+      }
     }
 
     ctx.restore();
   }
 
   function drawPois(ctx) {
-    const pois = getVisiblePoiRenderList(state.visiblePoiRadiusTiles);
-    pois.forEach((poi) => drawPointOfInterest(ctx, poi));
+    getVisiblePoiRenderList(state.visiblePoiRadiusTiles).forEach((poi) => drawPointOfInterest(ctx, poi));
   }
 
   function drawPlayer(ctx) {
@@ -1338,9 +944,7 @@ window.GrabLabWorld = (() => {
 
   function drawHudHints(ctx) {
     const selectedId = S.getRuntime()?.selectedEntityId;
-    const poi = getVisiblePoiRenderList(state.visiblePoiRadiusTiles)
-      .find((entry) => entry?.id === selectedId);
-
+    const poi = getVisiblePoiRenderList(state.visiblePoiRadiusTiles).find((entry) => entry?.id === selectedId);
     if (!poi) return;
 
     const typeLabel = U.titleCase(String(poi.type || "poi").replaceAll("_", " "));
@@ -1351,13 +955,15 @@ window.GrabLabWorld = (() => {
       actionHint = "Tap again to recruit.";
     } else if (distance === 0 && (poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
       actionHint = "Use Grab to capture.";
+    } else if (distance === 0 && (poi.type === "resource" || poi.type === "fungal_patch")) {
+      actionHint = "Use Grab to collect this resource.";
     } else if (distance === 0 && (poi.hostile || poi.type === "combat")) {
       actionHint = "Use Attack to engage.";
     }
 
     ctx.save();
     ctx.fillStyle = "rgba(10, 15, 11, 0.78)";
-    ctx.fillRect(18, 18, 360, 46);
+    ctx.fillRect(18, 18, 380, 46);
     ctx.fillStyle = "#edf6ef";
     ctx.font = "14px Trebuchet MS, sans-serif";
     ctx.textAlign = "left";
@@ -1442,21 +1048,29 @@ window.GrabLabWorld = (() => {
     const tile = S.getCurrentMapTile();
     if (!tile) return;
 
-    const expansion = getBaseExpansionCoordMap().get(`${Number(tile.x ?? S.getWorld().currentTileX)},${Number(tile.y ?? S.getWorld().currentTileY)}`);
-    if (expansion) return;
-
     if (!Array.isArray(tile.pointsOfInterest) || tile.pointsOfInterest.length === 0) {
       tile.pointsOfInterest = [
         {
-          id: `generated_tracks_${S.getWorld().currentTileX}_${S.getWorld().currentTileY}`,
-          name: "Animal Tracks",
-          shortName: "Tracks",
-          description: "Fresh tracks suggest wildlife has passed through recently.",
-          type: "tracks",
+          id: "dock_marker",
+          name: "Dock",
+          shortName: "Dock",
+          description: "Your river boat is tied up here, somehow still floating.",
+          type: "dock",
           tileX: S.getWorld().currentTileX,
           tileY: S.getWorld().currentTileY,
-          localX: CFG.WORLD.tileSize * 0.35,
-          localY: CFG.WORLD.tileSize * 0.42
+          localX: CFG.WORLD.tileSize * 0.52,
+          localY: CFG.WORLD.tileSize * 0.7
+        },
+        {
+          id: "fish_spot_1",
+          name: "Fishing Spot",
+          shortName: "Fish",
+          description: "The water looks lively, or judgmental. Hard to tell.",
+          type: "fish_spot",
+          tileX: S.getWorld().currentTileX,
+          tileY: S.getWorld().currentTileY,
+          localX: CFG.WORLD.tileSize * 0.78,
+          localY: CFG.WORLD.tileSize * 0.38
         }
       ];
     }
@@ -1645,6 +1259,38 @@ window.GrabLabWorld = (() => {
     drawWorld();
   }
 
+
+  function bindWorldCameraControls() {
+    const bind = (id, fn) => {
+      const btn = U.byId(id);
+      if (!btn || btn.dataset.worldCameraBound === "true") return;
+      btn.dataset.worldCameraBound = "true";
+      U.on(btn, "click", (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        fn();
+      });
+    };
+
+    bind("btnWorldPanUp", () => panCameraBy(0, -1.5, { followPlayer: false }));
+    bind("btnWorldPanDown", () => panCameraBy(0, 1.5, { followPlayer: false }));
+    bind("btnWorldPanLeft", () => panCameraBy(-1.5, 0, { followPlayer: false }));
+    bind("btnWorldPanRight", () => panCameraBy(1.5, 0, { followPlayer: false }));
+    bind("btnWorldZoomIn", () => zoomCamera(0.15));
+    bind("btnWorldZoomOut", () => zoomCamera(-0.15));
+    bind("btnWorldRecenter", () => recenterCameraOnPlayer());
+    bind("btnWorldToggleLabels", () => {
+      const visible = toggleMapLabels();
+      const btn = U.byId("btnWorldToggleLabels");
+      if (btn) btn.textContent = visible ? "Labels" : "No Text";
+    });
+    bind("btnWorldToggleBoat", () => {
+      const deployed = toggleBoatDeployed();
+      const btn = U.byId("btnWorldToggleBoat");
+      if (btn) btn.textContent = deployed ? "Boat On" : "Boat";
+    });
+  }
+
   function bindResize() {
     U.on(window, "resize", U.throttle(resizeCanvases, 80));
   }
@@ -1658,23 +1304,6 @@ window.GrabLabWorld = (() => {
 
     U.eventBus.on("world:changed", drawWorld);
     U.eventBus.on("world:timeChanged", drawWorld);
-
-    U.eventBus.on("base:changed", () => {
-      clearBaseExpansionPois();
-      drawWorld();
-    });
-
-    U.eventBus.on("world:poiResolved", () => {
-      ensureExpandedMapData();
-      drawWorld();
-    });
-
-    U.eventBus.on("data:bucketChanged", ({ key }) => {
-      if (key === "map" || key === "animals" || key === "plants" || key === "encounters") {
-        drawWorld();
-      }
-    });
-
     U.eventBus.on("screen:changed", (screenId) => {
       if (screenId === "game") {
         drawWorld();
@@ -1685,10 +1314,10 @@ window.GrabLabWorld = (() => {
   function init() {
     if (state.initialized) return true;
 
-    ensureExpandedMapData();
     resizeCanvases();
     maybeSeedCurrentTilePoi();
     bindResize();
+    bindWorldCameraControls();
     bindWorldEvents();
     drawWorld();
     start();
@@ -1705,14 +1334,21 @@ window.GrabLabWorld = (() => {
     drawWorld,
     resizeCanvases,
     getTileRect,
+    getTileSize,
     getCameraOrigin,
+    canvasToTile,
+    panCameraBy,
+    panCameraPixels,
+    zoomCamera,
+    recenterCameraOnPlayer,
+    setMapLabelsVisible,
+    toggleMapLabels,
+    getControlledAvatar,
+    getControlledTraits,
+    canControlledAvatarAccessTile,
+    getTileAccessRequirement,
+    toggleBoatDeployed,
     maybeSeedCurrentTilePoi,
-    ensureExpandedMapData,
-    clearBaseExpansionPois,
-    sanitizeBaseExpansionPoisInMap,
-    getVisiblePoiRenderList,
-    getBaseExpansionTiles,
-    getBaseExpansionCoordMap,
     enqueueTravelToTile,
     getRenderedPlayerTilePos,
     isTraveling: () => state.travel.active || state.travel.queuedSteps.length > 0

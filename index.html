@@ -231,6 +231,20 @@
             <canvas id="worldCanvas" width="1600" height="900" aria-label="World"></canvas>
             <canvas id="fxCanvas" width="1600" height="900" aria-label="Effects"></canvas>
 
+            <div id="worldNavControls" class="world-nav-controls" aria-label="World camera controls">
+              <button id="btnWorldPanUp" class="world-nav-btn world-nav-up" title="Scroll map up">▲</button>
+              <button id="btnWorldPanDown" class="world-nav-btn world-nav-down" title="Scroll map down">▼</button>
+              <button id="btnWorldPanLeft" class="world-nav-btn world-nav-left" title="Scroll map left">◀</button>
+              <button id="btnWorldPanRight" class="world-nav-btn world-nav-right" title="Scroll map right">▶</button>
+              <div class="world-zoom-cluster">
+                <button id="btnWorldZoomIn" class="world-tool-btn" title="Zoom in">＋</button>
+                <button id="btnWorldZoomOut" class="world-tool-btn" title="Zoom out">－</button>
+                <button id="btnWorldRecenter" class="world-tool-btn" title="Center on current controlled character">◎</button>
+                <button id="btnWorldToggleLabels" class="world-tool-btn" title="Toggle floating map labels">Labels</button>
+                <button id="btnWorldToggleBoat" class="world-tool-btn" title="Deploy or pack up the boat">Boat</button>
+              </div>
+            </div>
+
             <div id="interactionPrompt" class="interaction-prompt hidden">
               <div class="prompt-title" id="interactionTitle">Point of Interest</div>
               <div class="prompt-body" id="interactionBody">Tap to inspect.</div>
@@ -712,22 +726,20 @@
   <script src="js/saveLoad.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/modal.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/ui-icons.js"></script>
-  <script src="js/ui-stability.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/world.js"></script>
-  <script src="js/map.js"></script>
-  <script src="js/player.js"></script>
-  <script src="js/animals.js"></script>
-  <script src="js/breeding.js"></script>
-  <script src="js/combat.js"></script>
-  <script src="js/crafting.js"></script>
-  <script src="js/build.js"></script>
-  <script src="js/inventory.js"></script>
+  <script src="js/ui.js?v=20260504-mapcontrol"></script>
+  <script src="js/input.js?v=20260504-mapcontrol"></script>
+  <script src="js/world.js?v=20260504-mapcontrol"></script>
+  <script src="js/map.js?v=20260504-mapcontrol"></script>
+  <script src="js/player.js?v=20260504-mapcontrol"></script>
+  <script src="js/animals.js?v=20260504-mapcontrol"></script>
+  <script src="js/breeding.js?v=20260504-mapcontrol"></script>
+  <script src="js/combat.js?v=20260504-mapcontrol"></script>
+  <script src="js/crafting.js?v=20260504-mapcontrol"></script>
+  <script src="js/build.js?v=20260504-mapcontrol"></script>
+  <script src="js/inventory.js?v=20260504-mapcontrol"></script>
   <script src="js/fishing.js"></script>
   <script src="js/tutorial.js"></script>
   <script src="js/admin.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/main.js?v=20260504-mapcontrol"></script>
 </body>
 </html>

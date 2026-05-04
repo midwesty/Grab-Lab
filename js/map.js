@@ -25,30 +25,17 @@ window.GrabLabMap = (() => {
     return U.byId("mapLocationInfo");
   }
 
-  function htmlEscape(value = "") {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-  }
-
   function getTileSize() {
     const canvas = getCanvas();
     if (!canvas) return 16;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const drawWidth = canvas.width / dpr;
-    const drawHeight = canvas.height / dpr;
-
     const cols = CFG.WORLD.worldWidthTiles;
     const rows = CFG.WORLD.worldHeightTiles;
 
-    return Math.max(4, Math.min(
-      Math.floor(drawWidth / cols),
-      Math.floor(drawHeight / rows)
-    ));
+    return Math.min(
+      Math.floor(canvas.width / cols),
+      Math.floor(canvas.height / rows)
+    );
   }
 
   function resizeCanvas() {
@@ -73,6 +60,8 @@ window.GrabLabMap = (() => {
     const biomeId = tileDef?.biomeId || "field_station_island";
 
     switch (biomeId) {
+      case "deep_water":
+        return "#1f4564";
       case "river_channel":
         return "#355f79";
       case "wetland":
@@ -83,6 +72,8 @@ window.GrabLabMap = (() => {
         return "#66486b";
       case "reed_forest":
         return "#597845";
+      case "canopy":
+        return "#345d39";
       case "cliffside":
         return "#56585d";
       case "cavern_entry":
@@ -97,6 +88,8 @@ window.GrabLabMap = (() => {
     const biomeId = tileDef?.biomeId || "field_station_island";
 
     switch (biomeId) {
+      case "deep_water":
+        return "#4d9ed1";
       case "river_channel":
         return "#78b8d7";
       case "wetland":
@@ -107,6 +100,8 @@ window.GrabLabMap = (() => {
         return "#c58cdd";
       case "reed_forest":
         return "#a7cf63";
+      case "canopy":
+        return "#9ee283";
       case "cliffside":
         return "#9aa0a8";
       case "cavern_entry":
@@ -120,379 +115,10 @@ window.GrabLabMap = (() => {
   function getTileRect(tileX, tileY) {
     const size = getTileSize();
     return {
-      x: Number(tileX || 0) * size,
-      y: Number(tileY || 0) * size,
+      x: tileX * size,
+      y: tileY * size,
       size
     };
-  }
-
-  function stableHash(x, y, salt = 0) {
-    let n = Number(x || 0) * 374761393 + Number(y || 0) * 668265263 + Number(salt || 0) * 982451653;
-    n = (n ^ (n >>> 13)) * 1274126177;
-    n = n ^ (n >>> 16);
-    return Math.abs(n);
-  }
-
-  function stableRand(x, y, salt = 0) {
-    return (stableHash(x, y, salt) % 100000) / 100000;
-  }
-
-  function stablePick(list = [], x = 0, y = 0, salt = 0) {
-    const safe = U.toArray(list);
-    if (!safe.length) return null;
-    return safe[stableHash(x, y, salt) % safe.length];
-  }
-
-  function getPrimaryDockNode() {
-    const mapData = S.getData()?.map || {};
-    return (
-      U.toArray(mapData.nodes).find((node) => node.id === "field_station_dock") ||
-      U.toArray(mapData.nodes).find((node) => String(node.id || "").includes("dock")) ||
-      {
-        id: "field_station_dock",
-        name: "Field Station Dock",
-        shortName: "Dock",
-        x: CFG.WORLD.startingTile?.x ?? 12,
-        y: CFG.WORLD.startingTile?.y ?? 14
-      }
-    );
-  }
-
-  function getGeneratedBiomeId(x, y) {
-    const dock = getPrimaryDockNode();
-    const dx = Number(x || 0) - Number(dock?.x ?? 12);
-    const dy = Number(y || 0) - Number(dock?.y ?? 14);
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const noise = stableRand(x, y, 11);
-
-    if (distance <= 1.2) return "field_station_island";
-
-    if ((x + y) % 7 === 0 || noise < 0.16) return "river_channel";
-    if (noise < 0.32) return "wetland";
-    if (noise < 0.48) return "reed_forest";
-    if (noise < 0.62) return "mudflats";
-    if (noise < 0.78) return "fungal_grove";
-    if (noise < 0.89) return "cliffside";
-    return "cavern_entry";
-  }
-
-  function getGeneratedTileType(biomeId) {
-    if (biomeId === "river_channel") return "water";
-    if (biomeId === "mudflats") return "mud";
-    if (biomeId === "cavern_entry") return "cave";
-    return "land";
-  }
-
-  function getGeneratedTileName(biomeId, x, y) {
-    const options = {
-      field_station_island: ["Station Fringe", "Dock Approach", "Field Station Ground"],
-      river_channel: ["River Channel", "Deep Current", "Flooded Cut", "Brownwater Lane"],
-      wetland: ["Wetland Pocket", "Marsh Flat", "Sedge Pool", "Mosquito Choir"],
-      mudflats: ["Mud Spit", "Silt Shelf", "Boggy Flats", "Low Mudbank"],
-      fungal_grove: ["Fungal Grove", "Glowcap Patch", "Spore Hollow", "Bloom Rot"],
-      reed_forest: ["Reed Forest", "Cane Maze", "Whisper Reeds", "Reed Bank"],
-      cliffside: ["Broken Cliff", "Stone Rise", "Old Bluff", "Cracked Ledge"],
-      cavern_entry: ["Cavern Mouth", "Sinkhole Edge", "Dark Hollow", "Root Cave"]
-    };
-
-    return stablePick(options[biomeId] || ["Wild Tile"], x, y, 19);
-  }
-
-  function getAnimalsForBiome(biomeId) {
-    return U.toArray(S.getData()?.animals).filter((animal) => {
-      const habitat = animal?.habitat || "";
-      const tags = U.toArray(animal?.tags);
-      const habitatType = animal?.habitatType || "general";
-
-      if (habitat === biomeId) return true;
-      if (biomeId === "river_channel" && (habitatType === "aquarium" || tags.includes("fish") || tags.includes("aquatic"))) return true;
-      if (biomeId === "wetland" && ["field_station_island", "reed_forest"].includes(habitat)) return true;
-      if (biomeId === "reed_forest" && ["wetland", "field_station_island"].includes(habitat)) return true;
-      if (biomeId === "mudflats" && tags.includes("shell")) return true;
-      if (biomeId === "fungal_grove" && (tags.includes("fungal") || tags.includes("flying"))) return true;
-
-      return false;
-    });
-  }
-
-  function getResourcePoiForBiome(biomeId, x, y) {
-    const plants = U.toArray(S.getData()?.plants).filter((plant) => U.toArray(plant.biomes).includes(biomeId));
-    const plant = stablePick(plants, x, y, 41);
-
-    if (plant) {
-      return {
-        id: `gen_resource_${plant.id}_${x}_${y}`,
-        name: plant.name || U.titleCase(plant.id),
-        shortName: plant.shortName || "Plant",
-        description: plant.description || "A useful wild resource grows here.",
-        type: plant.id?.includes("glow") || plant.id?.includes("spore") ? "fungal_patch" : "resource",
-        plantId: plant.id,
-        tileX: x,
-        tileY: y,
-        localX: 18 + Math.floor(stableRand(x, y, 42) * 34),
-        localY: 18 + Math.floor(stableRand(x, y, 43) * 34)
-      };
-    }
-
-    if (biomeId === "river_channel") {
-      return {
-        id: `gen_fish_spot_${x}_${y}`,
-        name: "Fishing Spot",
-        shortName: "Fish",
-        description: "A promising fishing spot ripples against the current.",
-        type: "fish_spot",
-        tileX: x,
-        tileY: y,
-        localX: 20 + Math.floor(stableRand(x, y, 44) * 36),
-        localY: 18 + Math.floor(stableRand(x, y, 45) * 36)
-      };
-    }
-
-    return {
-      id: `gen_tracks_${x}_${y}`,
-      name: "Animal Tracks",
-      shortName: "Tracks",
-      description: "Fresh tracks suggest wildlife has passed through recently.",
-      type: "tracks",
-      tileX: x,
-      tileY: y,
-      localX: 18 + Math.floor(stableRand(x, y, 46) * 34),
-      localY: 18 + Math.floor(stableRand(x, y, 47) * 34)
-    };
-  }
-
-  function getAnimalPoiForBiome(biomeId, x, y, index = 0) {
-    const animals = getAnimalsForBiome(biomeId);
-    const animal = stablePick(animals, x, y, 60 + index);
-
-    if (!animal) return null;
-
-    return {
-      id: `gen_animal_${animal.id}_${x}_${y}_${index}`,
-      name: animal.name || U.titleCase(animal.id),
-      shortName: animal.shortName || String(animal.name || animal.id || "Animal").slice(0, 8),
-      description: animal.description || "A wild creature moves through this tile.",
-      type: "capturable_animal",
-      speciesId: animal.id,
-      capturable: true,
-      recruitable: false,
-      tileX: x,
-      tileY: y,
-      localX: 16 + Math.floor(stableRand(x, y, 61 + index) * 40),
-      localY: 16 + Math.floor(stableRand(x, y, 62 + index) * 40)
-    };
-  }
-
-  function getEncounterPoiForBiome(biomeId, x, y) {
-    const encounters = U.toArray(S.getData()?.encounters).filter((encounter) => {
-      return U.toArray(encounter?.biomes).includes(biomeId);
-    });
-
-    const encounter = stablePick(encounters, x, y, 80);
-    if (!encounter) return null;
-
-    if (encounter.type === "combat") {
-      return {
-        id: `gen_encounter_${encounter.id}_${x}_${y}`,
-        name: encounter.name || "Hostile Encounter",
-        shortName: "Fight",
-        description: encounter.description || "Something hostile is moving here.",
-        type: "combat",
-        hostile: true,
-        encounterId: encounter.id,
-        tileX: x,
-        tileY: y,
-        localX: 18 + Math.floor(stableRand(x, y, 81) * 34),
-        localY: 18 + Math.floor(stableRand(x, y, 82) * 34)
-      };
-    }
-
-    return {
-      id: `gen_event_${encounter.id}_${x}_${y}`,
-      name: encounter.name || "Odd Sign",
-      shortName: "Event",
-      description: encounter.description || "Something unusual happened here.",
-      type: encounter.type === "loot" ? "loot" : "tracks",
-      encounterId: encounter.id,
-      lootTableId: encounter.lootTableId || null,
-      tileX: x,
-      tileY: y,
-      localX: 18 + Math.floor(stableRand(x, y, 83) * 34),
-      localY: 18 + Math.floor(stableRand(x, y, 84) * 34)
-    };
-  }
-
-  function createGeneratedTile(x, y) {
-    const biomeId = getGeneratedBiomeId(x, y);
-    const tile = {
-      id: `tile_${x}_${y}`,
-      x,
-      y,
-      biomeId,
-      type: getGeneratedTileType(biomeId),
-      name: getGeneratedTileName(biomeId, x, y),
-      generated: true,
-      pointsOfInterest: []
-    };
-
-    const poiRoll = stableRand(x, y, 100);
-    const animalRoll = stableRand(x, y, 101);
-    const eventRoll = stableRand(x, y, 102);
-
-    if (poiRoll < 0.58) {
-      tile.pointsOfInterest.push(getResourcePoiForBiome(biomeId, x, y));
-    }
-
-    if (animalRoll < 0.44) {
-      const animalPoi = getAnimalPoiForBiome(biomeId, x, y, 0);
-      if (animalPoi) tile.pointsOfInterest.push(animalPoi);
-    }
-
-    if (animalRoll > 0.82) {
-      const animalPoi = getAnimalPoiForBiome(biomeId, x, y, 1);
-      if (animalPoi) tile.pointsOfInterest.push(animalPoi);
-    }
-
-    if (eventRoll < 0.22) {
-      const encounterPoi = getEncounterPoiForBiome(biomeId, x, y);
-      if (encounterPoi) tile.pointsOfInterest.push(encounterPoi);
-    }
-
-    tile.pointsOfInterest = tile.pointsOfInterest.filter(Boolean);
-
-    return tile;
-  }
-
-  function ensureExpandedMapData() {
-    const original = S.getData()?.map || {};
-    const mapData = {
-      ...original,
-      nodes: U.toArray(original.nodes),
-      tiles: U.toArray(original.tiles)
-    };
-
-    const byKey = new Map();
-    mapData.tiles.forEach((tile) => {
-      byKey.set(`${Number(tile.x)},${Number(tile.y)}`, {
-        ...tile,
-        pointsOfInterest: U.toArray(tile.pointsOfInterest)
-      });
-    });
-
-    for (let y = 0; y < CFG.WORLD.worldHeightTiles; y += 1) {
-      for (let x = 0; x < CFG.WORLD.worldWidthTiles; x += 1) {
-        const key = `${x},${y}`;
-        if (!byKey.has(key)) {
-          byKey.set(key, createGeneratedTile(x, y));
-        }
-      }
-    }
-
-    const dock = getPrimaryDockNode();
-    const dockX = Number(dock.x ?? CFG.WORLD.startingTile?.x ?? 12);
-    const dockY = Number(dock.y ?? CFG.WORLD.startingTile?.y ?? 14);
-
-    if (!mapData.nodes.some((node) => node.id === "field_station_dock")) {
-      mapData.nodes.unshift({
-        id: "field_station_dock",
-        name: "Field Station Dock",
-        shortName: "Dock",
-        x: dockX,
-        y: dockY
-      });
-    }
-
-    const dockKey = `${dockX},${dockY}`;
-    const dockTile = byKey.get(dockKey) || createGeneratedTile(dockX, dockY);
-
-    dockTile.biomeId = "field_station_island";
-    dockTile.type = "land";
-    dockTile.name = dockTile.name || "Field Station Alpha";
-    dockTile.pointsOfInterest = U.toArray(dockTile.pointsOfInterest);
-
-    if (!dockTile.pointsOfInterest.some((poi) => poi.type === "dock")) {
-      dockTile.pointsOfInterest.unshift({
-        id: "dock_marker",
-        name: "Dock",
-        shortName: "Dock",
-        description: "Your river boat is tied up here, somehow still floating.",
-        type: "dock",
-        tileX: dockX,
-        tileY: dockY,
-        localX: 33,
-        localY: 45
-      });
-    }
-
-    byKey.set(dockKey, dockTile);
-
-    mapData.tiles = [...byKey.values()].sort((a, b) => {
-      const yd = Number(a.y) - Number(b.y);
-      if (yd !== 0) return yd;
-      return Number(a.x) - Number(b.x);
-    });
-
-    S.replaceDataBucket("map", mapData);
-
-    return mapData;
-  }
-
-  function getBaseExpansionTiles() {
-    if (window.GL_WORLD?.getBaseExpansionTiles) {
-      return U.toArray(window.GL_WORLD.getBaseExpansionTiles());
-    }
-
-    const dock = getPrimaryDockNode();
-    const dockX = Number(dock.x ?? 12);
-    const dockY = Number(dock.y ?? 14);
-    const base = S.getBase();
-    const structures = U.toArray(base?.structures);
-    const habitats = U.toArray(base?.habitats);
-
-    const offsets = [
-      { x: 0, y: 0 },
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-      { x: 0, y: -1 },
-      { x: 1, y: 1 },
-      { x: -1, y: 1 },
-      { x: 1, y: -1 },
-      { x: -1, y: -1 },
-      { x: 2, y: 0 },
-      { x: 0, y: 2 },
-      { x: -2, y: 0 },
-      { x: 0, y: -2 }
-    ];
-
-    const entries = [
-      {
-        id: "dock_core",
-        structureId: "dock_core",
-        name: "Dock",
-        category: "dock"
-      },
-      ...structures.map((entry) => ({
-        ...entry,
-        category: S.getStructureDef(entry.structureId)?.category || "structure"
-      })),
-      ...habitats.map((entry) => ({
-        ...entry,
-        structureId: entry.structureId || entry.habitatType || "habitat",
-        name: entry.name || U.titleCase(entry.habitatType || "Habitat"),
-        category: "habitat"
-      }))
-    ];
-
-    return entries.map((entry, index) => {
-      const offset = offsets[index % offsets.length];
-      return {
-        ...entry,
-        tileX: dockX + offset.x,
-        tileY: dockY + offset.y,
-        offsetIndex: index
-      };
-    });
   }
 
   function drawTile(ctx, tileX, tileY) {
@@ -506,10 +132,8 @@ window.GrabLabMap = (() => {
     const current = tileX === world.currentTileX && tileY === world.currentTileY;
     const selected = state.selectedTile && state.selectedTile.x === tileX && state.selectedTile.y === tileY;
     const hover = state.hoverTile && state.hoverTile.x === tileX && state.hoverTile.y === tileY;
-    const hasDock = U.toArray(tileDef.pointsOfInterest).some((poi) => poi.type === "dock");
-    const hasNode = U.toArray(S.getData()?.map?.nodes).some((node) => Number(node.x) === tileX && Number(node.y) === tileY);
 
-    const fogged = CFG.WORLD.fogOfWarEnabled && !revealed && !hasDock && !hasNode;
+    const fogged = CFG.WORLD.fogOfWarEnabled && !revealed;
 
     ctx.fillStyle = fogged ? "#090c0a" : getBiomeColor(tileDef);
     ctx.fillRect(x, y, size, size);
@@ -519,13 +143,6 @@ window.GrabLabMap = (() => {
       ctx.fillStyle = getBiomeAccent(tileDef);
       ctx.fillRect(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size * 0.22));
       ctx.globalAlpha = 1;
-    }
-
-    if (U.toArray(tileDef.pointsOfInterest).length && !fogged) {
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.beginPath();
-      ctx.arc(x + size * 0.18, y + size * 0.18, Math.max(2, size * 0.08), 0, Math.PI * 2);
-      ctx.fill();
     }
 
     if (cleared) {
@@ -557,157 +174,11 @@ window.GrabLabMap = (() => {
     }
   }
 
-  function drawMapGlyph(ctx, kind, cx, cy, r) {
-    ctx.save();
-    ctx.lineWidth = Math.max(1, r * 0.18);
-
-    if (kind === "dock") {
-      ctx.fillStyle = "#fff0e5";
-      ctx.fillRect(cx - r * 0.7, cy - r * 0.2, r * 1.4, r * 0.4);
-      ctx.fillRect(cx - r * 0.42, cy + r * 0.2, r * 0.18, r * 0.72);
-      ctx.fillRect(cx + r * 0.24, cy + r * 0.2, r * 0.18, r * 0.72);
-    } else if (kind === "animal") {
-      ctx.fillStyle = "#eff8ea";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + r * 0.12, r * 0.65, r * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx + r * 0.5, cy - r * 0.25, r * 0.32, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (kind === "fish") {
-      ctx.fillStyle = "#eef8ff";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r * 0.72, r * 0.42, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(cx - r * 0.72, cy);
-      ctx.lineTo(cx - r * 1.18, cy - r * 0.4);
-      ctx.lineTo(cx - r * 1.18, cy + r * 0.4);
-      ctx.closePath();
-      ctx.fill();
-    } else if (kind === "combat") {
-      ctx.fillStyle = "#ffe1e1";
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - r);
-      ctx.lineTo(cx + r * 0.9, cy + r * 0.75);
-      ctx.lineTo(cx - r * 0.9, cy + r * 0.75);
-      ctx.closePath();
-      ctx.fill();
-    } else if (kind === "base") {
-      ctx.fillStyle = "#fff4bd";
-      ctx.fillRect(cx - r * 0.7, cy - r * 0.45, r * 1.4, r * 0.9);
-      ctx.fillStyle = "#8b623d";
-      ctx.fillRect(cx - r * 0.22, cy, r * 0.44, r * 0.45);
-    } else {
-      ctx.fillStyle = "#f5ffe4";
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  }
-
-  function getPoiKind(poi) {
-    if (!poi) return "resource";
-    if (poi.type === "dock") return "dock";
-    if (poi.type === "fish_spot") return "fish";
-    if (poi.type === "capturable_animal" || poi.type === "wild_animal") return "animal";
-    if (poi.type === "combat" || poi.hostile || poi.type === "hostile" || poi.type === "enemy") return "combat";
-    return "resource";
-  }
-
-  function drawPoiMarkers(ctx) {
-    const mapData = S.getData()?.map || {};
-    const size = getTileSize();
-
-    U.toArray(mapData.tiles).forEach((tile) => {
-      const pois = U.toArray(tile.pointsOfInterest).filter((poi) => !poi.resolved && !poi.hidden);
-      if (!pois.length) return;
-
-      const tileX = Number(tile.x);
-      const tileY = Number(tile.y);
-      const revealed = S.isTileRevealed(tileX, tileY);
-      const hasDock = pois.some((poi) => poi.type === "dock");
-
-      if (CFG.WORLD.fogOfWarEnabled && !revealed && !hasDock) return;
-
-      const rect = getTileRect(tileX, tileY);
-      const cx = rect.x + rect.size * 0.5;
-      const cy = rect.y + rect.size * 0.5;
-      const dockPoi = pois.find((poi) => poi.type === "dock");
-      const animalPoi = pois.find((poi) => poi.type === "capturable_animal" || poi.type === "wild_animal");
-      const fishPoi = pois.find((poi) => poi.type === "fish_spot");
-      const combatPoi = pois.find((poi) => poi.type === "combat" || poi.hostile);
-      const chosen = dockPoi || combatPoi || animalPoi || fishPoi || pois[0];
-
-      const kind = getPoiKind(chosen);
-      const r = Math.max(3, size * (kind === "dock" ? 0.22 : 0.16));
-
-      ctx.save();
-
-      if (!revealed && hasDock) {
-        ctx.globalAlpha = 0.95;
-      }
-
-      ctx.fillStyle =
-        kind === "dock" ? "#f0c4a1" :
-        kind === "combat" ? "#f76b6b" :
-        kind === "animal" ? "#95e07e" :
-        kind === "fish" ? "#7ec8ff" :
-        "#c8e37b";
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(0,0,0,0.65)";
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-
-      drawMapGlyph(ctx, kind, cx, cy, r * 0.75);
-
-      ctx.restore();
-    });
-  }
-
-  function drawBaseExpansionMarkers(ctx) {
-    const size = getTileSize();
-    const expansions = getBaseExpansionTiles();
-
-    expansions.forEach((entry) => {
-      const tileX = Number(entry.tileX);
-      const tileY = Number(entry.tileY);
-
-      if (tileX < 0 || tileY < 0 || tileX >= CFG.WORLD.worldWidthTiles || tileY >= CFG.WORLD.worldHeightTiles) return;
-
-      const rect = getTileRect(tileX, tileY);
-      const cx = rect.x + rect.size / 2;
-      const cy = rect.y + rect.size / 2;
-      const r = Math.max(4, size * 0.26);
-
-      ctx.save();
-      ctx.fillStyle = entry.offsetIndex === 0 ? "rgba(255, 209, 102, 0.95)" : "rgba(130, 209, 115, 0.92)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(0,0,0,0.65)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      drawMapGlyph(ctx, entry.offsetIndex === 0 ? "dock" : "base", cx, cy, r * 0.72);
-
-      ctx.restore();
-    });
-  }
-
   function drawNodes(ctx) {
     const mapData = S.getData()?.map || {};
     const nodes = U.toArray(mapData?.nodes);
     const world = S.getWorld();
     const fastNodes = new Set(U.toArray(world.fastTravelNodes));
-    const size = getTileSize();
 
     nodes.forEach((node) => {
       if (node?.x == null || node?.y == null) return;
@@ -715,36 +186,30 @@ window.GrabLabMap = (() => {
       const rect = getTileRect(Number(node.x), Number(node.y));
       const cx = rect.x + rect.size / 2;
       const cy = rect.y + rect.size / 2;
-      const isDock = String(node.id || "").includes("dock") || String(node.name || "").toLowerCase().includes("dock");
-      const revealed = S.isTileRevealed(node.x, node.y) || !CFG.WORLD.fogOfWarEnabled || isDock;
-      const unlocked = fastNodes.has(node.id);
+      const revealed = S.isTileRevealed(node.x, node.y) || !CFG.WORLD.fogOfWarEnabled;
 
       if (!revealed) return;
 
+      const unlocked = fastNodes.has(node.id);
+
       ctx.save();
 
-      ctx.fillStyle = isDock ? "#f0c4a1" : unlocked ? "#ffd166" : "#89d1ff";
+      ctx.fillStyle = unlocked ? "#ffd166" : "#89d1ff";
       ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(3, rect.size * 0.2), 0, Math.PI * 2);
+      ctx.arc(cx, cy, Math.max(3, rect.size * 0.18), 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = "rgba(0,0,0,0.65)";
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      if (isDock) {
-        drawMapGlyph(ctx, "dock", cx, cy, Math.max(4, rect.size * 0.16));
-      }
-
-      if (size >= 10 || isDock) {
-        const label = node.shortName || node.name || "Node";
-        const labelWidth = Math.max(34, Math.min(72, String(label).length * 6 + 10));
-        ctx.fillStyle = "rgba(10, 14, 11, 0.82)";
-        ctx.fillRect(cx - labelWidth / 2, cy - rect.size * 0.75, labelWidth, 13);
+      if (rect.size >= 12) {
+        ctx.fillStyle = "rgba(10, 14, 11, 0.78)";
+        ctx.fillRect(cx - 26, cy - rect.size * 0.6, 52, 13);
         ctx.fillStyle = "#edf6ef";
         ctx.font = "10px Trebuchet MS, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(label, cx, cy - rect.size * 0.75 + 10);
+        ctx.fillText(node.shortName || node.name || "Node", cx, cy - rect.size * 0.6 + 10);
       }
 
       ctx.restore();
@@ -752,6 +217,9 @@ window.GrabLabMap = (() => {
   }
 
   function drawGrid(ctx) {
+    const canvas = getCanvas();
+    if (!canvas) return;
+
     const size = getTileSize();
     const cols = CFG.WORLD.worldWidthTiles;
     const rows = CFG.WORLD.worldHeightTiles;
@@ -789,49 +257,11 @@ window.GrabLabMap = (() => {
     ctx.lineTo(CFG.WORLD.worldWidthTiles * size, y);
     ctx.stroke();
 
-    if (size >= 10) {
-      ctx.fillStyle = "rgba(10, 14, 11, 0.76)";
-      ctx.fillRect(10, y + 8, 180, 20);
-      ctx.fillStyle = "#edf6ef";
-      ctx.font = "12px Trebuchet MS, sans-serif";
-      ctx.fillText("Waterfall Boundary", 18, y + 22);
-    }
-
-    ctx.restore();
-  }
-
-  function drawLegend(ctx, drawWidth, drawHeight) {
-    const items = [
-      ["Dock/Base", "#f0c4a1"],
-      ["Animal", "#95e07e"],
-      ["Fish", "#7ec8ff"],
-      ["Threat", "#f76b6b"],
-      ["Resource", "#c8e37b"]
-    ];
-
-    const boxW = 150;
-    const boxH = items.length * 16 + 12;
-    const x = Math.max(8, drawWidth - boxW - 8);
-    const y = Math.max(8, drawHeight - boxH - 8);
-
-    ctx.save();
-    ctx.fillStyle = "rgba(10,14,11,0.76)";
-    ctx.fillRect(x, y, boxW, boxH);
-
-    ctx.font = "10px Trebuchet MS, sans-serif";
-    ctx.textAlign = "left";
-
-    items.forEach((item, index) => {
-      const rowY = y + 14 + index * 16;
-      ctx.fillStyle = item[1];
-      ctx.beginPath();
-      ctx.arc(x + 12, rowY - 3, 4, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#edf6ef";
-      ctx.fillText(item[0], x + 22, rowY);
-    });
-
+    ctx.fillStyle = "rgba(10, 14, 11, 0.76)";
+    ctx.fillRect(10, y + 8, 180, 20);
+    ctx.fillStyle = "#edf6ef";
+    ctx.font = "12px Trebuchet MS, sans-serif";
+    ctx.fillText("Waterfall Boundary", 18, y + 22);
     ctx.restore();
   }
 
@@ -840,9 +270,8 @@ window.GrabLabMap = (() => {
     const ctx = getCtx();
     if (!canvas || !ctx) return;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const drawWidth = canvas.width / dpr;
-    const drawHeight = canvas.height / dpr;
+    const drawWidth = canvas.width / Math.max(1, window.devicePixelRatio || 1);
+    const drawHeight = canvas.height / Math.max(1, window.devicePixelRatio || 1);
 
     ctx.clearRect(0, 0, drawWidth, drawHeight);
 
@@ -856,11 +285,8 @@ window.GrabLabMap = (() => {
     }
 
     drawGrid(ctx);
-    drawPoiMarkers(ctx);
-    drawBaseExpansionMarkers(ctx);
     drawNodes(ctx);
     drawWaterfallBoundary(ctx);
-    drawLegend(ctx, drawWidth, drawHeight);
   }
 
   function canvasToTile(evt) {
@@ -869,9 +295,8 @@ window.GrabLabMap = (() => {
 
     const pos = U.getPointerPos(evt, canvas);
     const rect = canvas.getBoundingClientRect();
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const scaleX = (canvas.width / rect.width) / dpr;
-    const scaleY = (canvas.height / rect.height) / dpr;
+    const scaleX = (canvas.width / rect.width) / Math.max(1, window.devicePixelRatio || 1);
+    const scaleY = (canvas.height / rect.height) / Math.max(1, window.devicePixelRatio || 1);
 
     const size = getTileSize();
 
@@ -915,25 +340,16 @@ window.GrabLabMap = (() => {
       (n) => Number(n.x) === Number(tileX) && Number(n.y) === Number(tileY)
     );
 
-    const baseExpansion = getBaseExpansionTiles().find((entry) => {
-      return Number(entry.tileX) === Number(tileX) && Number(entry.tileY) === Number(tileY);
-    });
-
-    const hasDock = U.toArray(tile.pointsOfInterest).some((poi) => poi.type === "dock");
-    const alwaysVisible = Boolean(hasDock || baseExpansion || node);
-
     return {
       x: tileX,
       y: tileY,
-      name: tile.name || baseExpansion?.name || node?.name || `Tile ${tileX}, ${tileY}`,
+      name: tile.name || node?.name || `Tile ${tileX}, ${tileY}`,
       biomeId: tile.biomeId || "unknown",
       type: tile.type || "land",
       revealed,
-      visible: revealed || alwaysVisible,
       cleared,
       current: tileX === world.currentTileX && tileY === world.currentTileY,
       node: node || null,
-      baseExpansion: baseExpansion || null,
       canFastTravel: canFastTravelTo(tileX, tileY),
       pointsOfInterest: U.toArray(tile.pointsOfInterest)
     };
@@ -944,24 +360,12 @@ window.GrabLabMap = (() => {
     if (!info || !summary) return;
 
     const poiList = summary.pointsOfInterest.length
-      ? summary.pointsOfInterest.map((poi) => {
-        const label = poi.type === "capturable_animal" || poi.type === "wild_animal"
-          ? `🟢 ${poi.name || poi.id || "Animal"}`
-          : poi.type === "dock"
-            ? `⚓ ${poi.name || "Dock"}`
-            : poi.type === "fish_spot"
-              ? `🐟 ${poi.name || "Fishing Spot"}`
-              : poi.type === "combat" || poi.hostile
-                ? `⚠️ ${poi.name || "Threat"}`
-                : `• ${poi.name || poi.id || "POI"}`;
-
-        return `<li>${htmlEscape(label)}</li>`;
-      }).join("")
+      ? summary.pointsOfInterest.map((poi) => `<li>${htmlEscape(poi.name || poi.id || "POI")}</li>`).join("")
       : "<li>None</li>";
 
     const travelButtons = [];
 
-    if (summary.revealed || summary.visible) {
+    if (summary.revealed) {
       travelButtons.push(`<button id="btnMapTravelHere" class="primary-btn">Travel Here</button>`);
     }
 
@@ -972,14 +376,12 @@ window.GrabLabMap = (() => {
     info.innerHTML = `
       <h3>${htmlEscape(summary.name)}</h3>
       <p><strong>Tile:</strong> ${summary.x}, ${summary.y}</p>
-      <p><strong>Biome:</strong> ${htmlEscape(U.titleCase(String(summary.biomeId).replaceAll("_", " ")))}</p>
+      <p><strong>Biome:</strong> ${htmlEscape(U.titleCase(summary.biomeId))}</p>
       <p><strong>Type:</strong> ${htmlEscape(U.titleCase(summary.type))}</p>
-      <p><strong>Visible:</strong> ${summary.visible ? "Yes" : "No"}</p>
       <p><strong>Revealed:</strong> ${summary.revealed ? "Yes" : "No"}</p>
       <p><strong>Cleared:</strong> ${summary.cleared ? "Yes" : "No"}</p>
       <p><strong>Current Location:</strong> ${summary.current ? "Yes" : "No"}</p>
       <p><strong>Fast Travel Node:</strong> ${summary.node ? htmlEscape(summary.node.name || summary.node.id) : "No"}</p>
-      ${summary.baseExpansion ? `<p><strong>Base Expansion:</strong> ${htmlEscape(summary.baseExpansion.name || summary.baseExpansion.structureId || "Built Area")}</p>` : ""}
       <h4>Points of Interest</h4>
       <ul>${poiList}</ul>
       <div class="admin-console-actions">${travelButtons.join("")}</div>
@@ -999,6 +401,15 @@ window.GrabLabMap = (() => {
         travelToTile(summary.x, summary.y, true);
       });
     }
+  }
+
+  function htmlEscape(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
   }
 
   function selectTile(tileX, tileY) {
@@ -1025,7 +436,7 @@ window.GrabLabMap = (() => {
   function travelToTile(tileX, tileY, fast = false) {
     const summary = getTileSummary(tileX, tileY);
 
-    if (!summary.revealed && !summary.visible && !fast) {
+    if (!summary.revealed && !fast) {
       S.addToast("You cannot travel to an unrevealed tile.", "error");
       return false;
     }
@@ -1037,11 +448,7 @@ window.GrabLabMap = (() => {
 
     const biomeId = S.getMapTile(tileX, tileY)?.biomeId || S.getWorld().currentBiomeId;
 
-    if (window.GL_WORLD?.enqueueTravelToTile && !fast) {
-      window.GL_WORLD.enqueueTravelToTile(tileX, tileY, biomeId);
-    } else {
-      S.movePlayerToTile(tileX, tileY, biomeId);
-    }
+    S.movePlayerToTile(tileX, tileY, biomeId);
 
     if (summary.node?.id) {
       S.updateWorld({ currentMapNodeId: summary.node.id });
@@ -1117,17 +524,8 @@ window.GrabLabMap = (() => {
     U.eventBus.on("world:playerMoved", drawMap);
     U.eventBus.on("world:tileRevealed", drawMap);
     U.eventBus.on("world:tileCleared", drawMap);
-    U.eventBus.on("base:changed", drawMap);
-
-    U.eventBus.on("data:bucketChanged", ({ key }) => {
-      if (key === "map" || key === "animals" || key === "plants" || key === "encounters") {
-        drawMap();
-      }
-    });
-
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "mapModal") {
-        ensureExpandedMapData();
         resizeCanvas();
         drawMap();
       }
@@ -1136,8 +534,250 @@ window.GrabLabMap = (() => {
     U.on(window, "resize", U.throttle(resizeCanvas, 80));
   }
 
+  function seededNoise(x, y, salt = 0) {
+    return stableRand(Math.floor(Number(x || 0) / 4), Math.floor(Number(y || 0) / 4), salt);
+  }
+
+  function getRiverYForX(x) {
+    const dock = getPrimaryDockNode();
+    const baseY = Number(dock?.y ?? CFG.WORLD.startingTile.y ?? 14);
+    return baseY + Math.sin(Number(x || 0) * 0.24) * 3.4 + Math.sin(Number(x || 0) * 0.09 + 2) * 2.2;
+  }
+
+  function getClusteredBiomeId(x, y) {
+    const dock = getPrimaryDockNode();
+    const dx = Number(x || 0) - Number(dock?.x ?? CFG.WORLD.startingTile.x ?? 12);
+    const dy = Number(y || 0) - Number(dock?.y ?? CFG.WORLD.startingTile.y ?? 14);
+    const distFromDock = Math.sqrt(dx * dx + dy * dy);
+
+    if (distFromDock <= 1.15) return "field_station_island";
+
+    const riverY = getRiverYForX(x);
+    const riverDist = Math.abs(Number(y || 0) - riverY);
+
+    // One main waterway, with a deeper middle. It runs right by the dock,
+    // while the dock tile and close shore stay safe/simple.
+    if (riverDist < 0.65) return distFromDock <= 3.1 ? "river_channel" : "deep_water";
+    if (riverDist < 1.85) return "river_channel";
+
+    if (distFromDock <= 5.2) return "field_station_island";
+
+    // Ponds and one larger lake-like patch.
+    const ponds = [
+      { x: 20, y: 8, r: 3.4 },
+      { x: 42, y: 27, r: 4.8 },
+      { x: 52, y: 45, r: 3.8 },
+      { x: 31, y: 49, r: 6.0 }
+    ];
+
+    for (const pond of ponds) {
+      const pd = Math.sqrt((Number(x || 0) - pond.x) ** 2 + (Number(y || 0) - pond.y) ** 2);
+      if (pd < pond.r * 0.42) return "deep_water";
+      if (pd < pond.r) return "river_channel";
+      if (pd < pond.r + 1.4) return "wetland";
+    }
+
+    const n1 = seededNoise(x, y, 21);
+    const n2 = seededNoise(x + 17, y - 11, 44);
+    const n3 = seededNoise(x - 23, y + 9, 77);
+
+    // Large clustered zones instead of checkerboard tiles.
+    if (Number(x) > 34 && Number(y) > 18 && n1 > 0.42) return "fungal_grove";
+    if (Number(x) > 46 && Number(y) < 22 && n2 > 0.35) return "cliffside";
+    if (Number(x) < 18 && Number(y) > 34 && n3 > 0.45) return "reed_forest";
+    if (Number(y) > 40 && n2 < 0.38) return "mudflats";
+    if (Number(x) > 22 && Number(x) < 42 && Number(y) > 8 && Number(y) < 28 && n1 < 0.52) return "wetland";
+    if (Number(x) > 50 && Number(y) > 10 && Number(y) < 32 && n3 > 0.72) return "canopy";
+    if (Number(x) > 45 && Number(y) > 38 && n1 > 0.7) return "cavern_entry";
+
+    return n1 < 0.42 ? "wetland" : n1 < 0.68 ? "reed_forest" : "mudflats";
+  }
+
+  function getClusteredTileType(biomeId) {
+    if (biomeId === "deep_water") return "deep_water";
+    if (biomeId === "river_channel") return "water";
+    if (biomeId === "mudflats") return "mud";
+    if (biomeId === "canopy") return "canopy";
+    if (biomeId === "cliffside") return "highland";
+    if (biomeId === "cavern_entry") return "cave";
+    return "land";
+  }
+
+  function getClusteredTileName(biomeId, x, y) {
+    const names = {
+      field_station_island: ["Safe Station Ground", "Dock Fringe", "Field Station Meadow"],
+      river_channel: ["River Channel", "Shallow Waterway", "Brownwater Bend"],
+      deep_water: ["Deep Water", "Dark Channel", "Cold River Pocket"],
+      wetland: ["Wetland Pocket", "Marsh Flat", "Sedge Pool"],
+      reed_forest: ["Reed Forest", "Cane Maze", "Whisper Reeds"],
+      mudflats: ["Mud Spit", "Silt Shelf", "Low Mudbank"],
+      fungal_grove: ["Fungal Grove", "Glowcap Patch", "Spore Hollow"],
+      cliffside: ["Broken Cliff", "Stone Rise", "Old Bluff"],
+      canopy: ["Canopy Perch", "Tree Top", "High Branches"],
+      cavern_entry: ["Cavern Mouth", "Sinkhole Edge", "Root Cave"]
+    };
+    return stablePick(names[biomeId] || ["Wild Tile"], x, y, 19) || "Wild Tile";
+  }
+
+  function generatePoisForTile(biomeId, x, y, priorPois = []) {
+    const existing = U.toArray(priorPois).filter(Boolean);
+    if (existing.length) return existing;
+
+    const pois = [];
+    const plants = U.toArray(S.getData()?.plants).filter((plant) => U.toArray(plant.biomes).includes(biomeId));
+    const plant = stablePick(plants, x, y, 141);
+
+    if (plant && stableRand(x, y, 142) < 0.62) {
+      pois.push({
+        id: `gen_resource_${plant.id}_${x}_${y}`,
+        name: plant.name || U.titleCase(plant.id),
+        shortName: plant.shortName || (plant.name ? String(plant.name).slice(0, 8) : "Plant"),
+        description: plant.description || "A useful wild resource grows here.",
+        type: plant.id?.includes("glow") || plant.id?.includes("spore") ? "fungal_patch" : (plant.id?.includes("algae") ? "algae" : "resource"),
+        plantId: plant.id,
+        harvestItemId: plant.harvestItemId,
+        yieldMin: plant.yieldMin ?? 1,
+        yieldMax: plant.yieldMax ?? 2,
+        grabbable: true,
+        tileX: x,
+        tileY: y,
+        localX: 16 + Math.floor(stableRand(x, y, 143) * 40),
+        localY: 16 + Math.floor(stableRand(x, y, 144) * 40)
+      });
+    }
+
+    const animals = U.toArray(S.getData()?.animals).filter((animal) => {
+      const tags = U.toArray(animal.tags);
+      if (animal.habitat === biomeId) return true;
+      if ((biomeId === "river_channel" || biomeId === "deep_water") && (animal.habitatType === "aquarium" || tags.includes("fish") || tags.includes("aquatic"))) return true;
+      if (biomeId === "wetland" && ["field_station_island", "reed_forest"].includes(animal.habitat)) return true;
+      if (biomeId === "reed_forest" && ["wetland", "field_station_island"].includes(animal.habitat)) return true;
+      if (biomeId === "mudflats" && tags.includes("shell")) return true;
+      if (biomeId === "fungal_grove" && (tags.includes("fungal") || tags.includes("flying"))) return true;
+      if (biomeId === "canopy" && tags.includes("flying")) return true;
+      return false;
+    });
+
+    if (animals.length && stableRand(x, y, 151) < 0.42) {
+      const animal = stablePick(animals, x, y, 152);
+      pois.push({
+        id: `gen_animal_${animal.id}_${x}_${y}`,
+        name: animal.name || U.titleCase(animal.id),
+        shortName: animal.shortName || String(animal.name || animal.id || "Animal").slice(0, 8),
+        description: animal.description || "A wild creature moves through this tile.",
+        type: "capturable_animal",
+        speciesId: animal.id,
+        capturable: true,
+        tileX: x,
+        tileY: y,
+        localX: 16 + Math.floor(stableRand(x, y, 153) * 40),
+        localY: 16 + Math.floor(stableRand(x, y, 154) * 40)
+      });
+    } else if (stableRand(x, y, 155) < 0.24 && !["river_channel", "deep_water"].includes(biomeId)) {
+      pois.push({
+        id: `gen_tracks_${x}_${y}`,
+        name: "Animal Tracks",
+        shortName: "Tracks",
+        description: "Fresh tracks suggest wildlife has passed through recently. Traps work better here.",
+        type: "tracks",
+        tileX: x,
+        tileY: y,
+        localX: 18 + Math.floor(stableRand(x, y, 156) * 34),
+        localY: 18 + Math.floor(stableRand(x, y, 157) * 34)
+      });
+    }
+
+    const encounters = U.toArray(S.getData()?.encounters).filter((encounter) => U.toArray(encounter.biomes).includes(biomeId));
+    if (encounters.length && stableRand(x, y, 161) < 0.2) {
+      const encounter = stablePick(encounters, x, y, 162);
+      if (encounter.type === "combat") {
+        pois.push({
+          id: `gen_encounter_${encounter.id}_${x}_${y}`,
+          name: encounter.name || "Hostile Encounter",
+          shortName: "Fight",
+          description: encounter.description || "Something hostile is moving here.",
+          type: "combat",
+          hostile: true,
+          encounterId: encounter.id,
+          tileX: x,
+          tileY: y,
+          localX: 18 + Math.floor(stableRand(x, y, 163) * 34),
+          localY: 18 + Math.floor(stableRand(x, y, 164) * 34)
+        });
+      } else if (encounter.type === "loot") {
+        pois.push({
+          id: `gen_loot_${encounter.id}_${x}_${y}`,
+          name: encounter.name || "Lost Cache",
+          shortName: "Cache",
+          description: encounter.description || "A small stash may be hidden here.",
+          type: "loot",
+          lootTableId: encounter.lootTableId || "starter_cache",
+          tileX: x,
+          tileY: y,
+          localX: 18 + Math.floor(stableRand(x, y, 165) * 34),
+          localY: 18 + Math.floor(stableRand(x, y, 166) * 34)
+        });
+      }
+    }
+
+    return pois;
+  }
+
   function seedFallbackMapData() {
-    ensureExpandedMapData();
+    const mapData = S.getData()?.map || {};
+    if (!Array.isArray(mapData.tiles)) mapData.tiles = [];
+    if (!Array.isArray(mapData.nodes)) mapData.nodes = [];
+
+    const width = Number(CFG.WORLD.worldWidthTiles || 64);
+    const height = Number(CFG.WORLD.worldHeightTiles || 64);
+    const existing = new Map(mapData.tiles.map((tile) => [`${Number(tile.x)},${Number(tile.y)}`, tile]));
+
+    const nextTiles = [];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const key = `${x},${y}`;
+        const prior = existing.get(key) || {};
+        const biomeId = getClusteredBiomeId(x, y);
+        const type = getClusteredTileType(biomeId);
+
+        nextTiles.push({
+          id: prior.id || `tile_${x}_${y}`,
+          ...prior,
+          x,
+          y,
+          biomeId,
+          type,
+          access: prior.access || null,
+          name: getClusteredTileName(biomeId, x, y),
+          pointsOfInterest: generatePoisForTile(biomeId, x, y, prior.pointsOfInterest)
+        });
+      }
+    }
+
+    mapData.tiles = nextTiles;
+    mapData.proceduralLayoutVersion = "clustered-waterway-v1";
+
+    if (!mapData.nodes.some((node) => node.id === "field_station_dock")) {
+      mapData.nodes.unshift({
+        id: "field_station_dock",
+        name: "Field Station Dock",
+        shortName: "Dock",
+        x: CFG.WORLD.startingTile.x,
+        y: CFG.WORLD.startingTile.y
+      });
+    }
+
+    // Keep named landmarks, but add a few useful clustered-world anchors for later builder editing.
+    const ensureNode = (node) => {
+      if (!mapData.nodes.some((entry) => entry.id === node.id)) mapData.nodes.push(node);
+    };
+
+    ensureNode({ id: "upper_pond", name: "Upper Pond", shortName: "Pond", x: 20, y: 8 });
+    ensureNode({ id: "fungal_front", name: "Fungal Front", shortName: "Fungus", x: 42, y: 25 });
+    ensureNode({ id: "canopy_rise", name: "Canopy Rise", shortName: "Canopy", x: 53, y: 18 });
+    ensureNode({ id: "mud_lake", name: "Mud Lake", shortName: "Lake", x: 31, y: 49 });
+
+    S.replaceDataBucket("map", mapData);
 
     const world = S.getWorld();
     S.revealTile(world.currentTileX, world.currentTileY);
@@ -1145,8 +785,6 @@ window.GrabLabMap = (() => {
     S.revealTile(world.currentTileX - 1, world.currentTileY);
     S.revealTile(world.currentTileX, world.currentTileY + 1);
     S.revealTile(world.currentTileX, world.currentTileY - 1);
-
-    return true;
   }
 
   function init() {
@@ -1176,8 +814,7 @@ window.GrabLabMap = (() => {
     clearHoverTile,
     travelToTile,
     getTileSummary,
-    seedFallbackMapData,
-    ensureExpandedMapData
+    seedFallbackMapData
   };
 
   window.GL_MAP = API;

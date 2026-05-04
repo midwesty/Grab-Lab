@@ -9,8 +9,7 @@ window.GrabLabCrafting = (() => {
     initialized: false,
     selectedRecipeId: null,
     selectedStationFilter: "all",
-    selectedStationTarget: "base", // base | boat | all
-    delegatedClicksBound: false
+    selectedStationTarget: "base" // base | boat | all
   };
 
   function htmlEscape(value = "") {
@@ -295,17 +294,6 @@ window.GrabLabCrafting = (() => {
     return "player";
   }
 
-  function refreshAfterCraftingAction() {
-    renderCraftingPanel();
-    UI.renderHud?.();
-    UI.renderInventoryModal?.();
-
-    if (S.isModalOpen?.("baseModal")) UI.renderBaseModal?.();
-    if (S.isModalOpen?.("trapsModal")) UI.renderTrapsModal?.();
-
-    window.GL_UI_ICONS?.scheduleDecorate?.();
-  }
-
   function createCraftingJob(recipeId, quantity = 1, options = {}) {
     const recipe = getRecipe(recipeId);
     if (!recipe) throw new Error("Recipe not found.");
@@ -329,7 +317,8 @@ window.GrabLabCrafting = (() => {
       P.awardSkillXp?.("crafting", 4 + qty, "instant craft");
       S.logActivity(`Crafted ${getRecipeName(recipeId)} x${qty}.`, "success");
       S.addToast(`Crafted ${getRecipeName(recipeId)}`, "success");
-      refreshAfterCraftingAction();
+      renderCraftingPanel();
+      UI.renderEverything?.();
       return null;
     }
 
@@ -354,8 +343,9 @@ window.GrabLabCrafting = (() => {
     P.awardSkillXp?.("crafting", 3, "starting craft");
 
     S.logActivity(`Started crafting ${getRecipeName(recipeId)} x${job.quantity}.`, "success");
-    S.addToast(`Crafting ${getRecipeName(recipeId)} queued.`, "success");
-    refreshAfterCraftingAction();
+    S.addToast(`Crafting ${getRecipeName(recipeId)}...`, "success");
+    renderCraftingPanel();
+    UI.renderEverything?.();
 
     return job;
   }
@@ -380,8 +370,9 @@ window.GrabLabCrafting = (() => {
     P.awardPlayerXp?.(4 + qty, `crafting ${getRecipeName(recipeId)}`);
 
     S.logActivity(`Crafted ${getRecipeName(recipeId)} x${qty}.`, "success");
-    S.addToast(`Crafted ${getRecipeName(recipeId)}.`, "success");
-    refreshAfterCraftingAction();
+    S.addToast(`Crafted ${getRecipeName(recipeId)}`, "success");
+    renderCraftingPanel();
+    UI.renderEverything?.();
 
     return true;
   }
@@ -431,7 +422,8 @@ window.GrabLabCrafting = (() => {
 
     S.logActivity(`Cancelled crafting job ${getRecipeName(job.recipeId)}.`, "warning");
     S.addToast("Crafting job cancelled.", "warning");
-    refreshAfterCraftingAction();
+    renderCraftingPanel();
+    UI.renderEverything?.();
 
     return true;
   }
@@ -458,8 +450,9 @@ window.GrabLabCrafting = (() => {
     P.awardPlayerXp?.(5 + Number(job.quantity || 1), `completing ${getRecipeName(job.recipeId)}`);
 
     S.logActivity(`Finished crafting ${getRecipeName(job.recipeId)} x${job.quantity}.`, "success");
-    S.addToast(`${getRecipeName(job.recipeId)} complete.`, "success");
-    refreshAfterCraftingAction();
+    S.addToast(`${getRecipeName(job.recipeId)} complete`, "success");
+    renderCraftingPanel();
+    UI.renderEverything?.();
 
     return true;
   }
@@ -576,175 +569,6 @@ window.GrabLabCrafting = (() => {
     return "player";
   }
 
-  function getRuntimeTrapItems() {
-    return [
-      {
-        id: "improvised_snare_trap",
-        name: "Improvised Snare Trap",
-        description: "A rough reusable trap for small land creatures.",
-        tags: ["trap"],
-        trapType: "land",
-        trapCatchChance: 0.34,
-        trapCycleMinutes: 60,
-        weight: 2,
-        value: 10
-      },
-      {
-        id: "reed_fish_trap",
-        name: "Reed Fish Trap",
-        description: "A small woven trap for passive aquatic catches.",
-        tags: ["trap", "fishing"],
-        trapType: "water",
-        trapCatchChance: 0.38,
-        trapCycleMinutes: 75,
-        weight: 2,
-        value: 12
-      },
-      {
-        id: "cage_trap_basic",
-        name: "Basic Cage Trap",
-        description: "A sturdier trap with better odds and room for larger land animals.",
-        tags: ["trap"],
-        trapType: "land",
-        trapCatchChance: 0.42,
-        trapCycleMinutes: 90,
-        weight: 3,
-        value: 16
-      }
-    ];
-  }
-
-  function getRuntimeTrapRecipes() {
-    return [
-      {
-        id: "improvised_snare_trap",
-        name: "Improvised Snare Trap",
-        description: "A quick land trap for passive small-creature catches.",
-        station: "field",
-        durationMinutes: 10,
-        inputs: [
-          { itemId: "fiber_bundle", quantity: 2 },
-          { itemId: "rope_bundle", quantity: 1 },
-          { itemId: "scrap_wood", quantity: 1 }
-        ],
-        outputs: [
-          { itemId: "improvised_snare_trap", quantity: 1 }
-        ]
-      },
-      {
-        id: "reed_fish_trap",
-        name: "Reed Fish Trap",
-        description: "A water trap for passive aquatic catches.",
-        station: "field",
-        durationMinutes: 10,
-        inputs: [
-          { itemId: "fiber_bundle", quantity: 3 },
-          { itemId: "rope_bundle", quantity: 1 }
-        ],
-        outputs: [
-          { itemId: "reed_fish_trap", quantity: 1 }
-        ]
-      },
-      {
-        id: "cage_trap_basic",
-        name: "Basic Cage Trap",
-        description: "A sturdier trap with better odds and room for larger land animals.",
-        station: "field",
-        durationMinutes: 15,
-        inputs: [
-          { itemId: "scrap_wood", quantity: 4 },
-          { itemId: "fiber_bundle", quantity: 2 },
-          { itemId: "rope_bundle", quantity: 2 }
-        ],
-        outputs: [
-          { itemId: "cage_trap_basic", quantity: 1 }
-        ]
-      }
-    ];
-  }
-
-  function ensureTrapCraftingData() {
-    const data = S.getData?.() || {};
-    const items = U.toArray(data.items);
-    const recipes = U.toArray(data.recipes);
-
-    const itemIds = new Set(items.map((entry) => entry.id));
-    const recipeIds = new Set(recipes.map((entry) => entry.id));
-
-    let changedItems = false;
-    let changedRecipes = false;
-
-    getRuntimeTrapItems().forEach((item) => {
-      if (!itemIds.has(item.id)) {
-        items.push(item);
-        changedItems = true;
-      }
-    });
-
-    getRuntimeTrapRecipes().forEach((recipe) => {
-      if (!recipeIds.has(recipe.id)) {
-        recipes.push(recipe);
-        changedRecipes = true;
-      }
-    });
-
-    if (changedItems) {
-      S.replaceDataBucket("items", items);
-    }
-
-    if (changedRecipes) {
-      S.replaceDataBucket("recipes", recipes);
-    }
-
-    return changedItems || changedRecipes;
-  }
-
-  function executeCraftNow(recipeId = state.selectedRecipeId) {
-    const recipe = getRecipe(recipeId);
-
-    if (!recipe) {
-      S.addToast("Select a recipe first.", "warning");
-      return false;
-    }
-
-    try {
-      const outputTarget = getDefaultOutputTargetForRecipe(recipe, state.selectedStationTarget);
-      craftInstant(recipe.id, 1, {
-        stationTarget: state.selectedStationTarget,
-        outputTarget
-      });
-      return true;
-    } catch (err) {
-      console.error("Craft Now failed:", err);
-      S.addToast(err.message || "Craft failed.", "error");
-      S.logActivity(`Craft failed: ${err.message || err}`, "error");
-      return false;
-    }
-  }
-
-  function executeQueueCraft(recipeId = state.selectedRecipeId) {
-    const recipe = getRecipe(recipeId);
-
-    if (!recipe) {
-      S.addToast("Select a recipe first.", "warning");
-      return false;
-    }
-
-    try {
-      const outputTarget = getDefaultOutputTargetForRecipe(recipe, state.selectedStationTarget);
-      createCraftingJob(recipe.id, 1, {
-        stationTarget: state.selectedStationTarget,
-        outputTarget
-      });
-      return true;
-    } catch (err) {
-      console.error("Queue Craft failed:", err);
-      S.addToast(err.message || "Queue failed.", "error");
-      S.logActivity(`Queue failed: ${err.message || err}`, "error");
-      return false;
-    }
-  }
-
   function renderRecipeList() {
     const list = U.byId("recipeList");
     if (!list) return;
@@ -847,8 +671,8 @@ window.GrabLabCrafting = (() => {
       }
 
       <div class="admin-console-actions">
-        <button id="btnCraftOnce" type="button" class="primary-btn" data-recipe-id="${htmlEscape(recipe.id)}" ${data.canCraft ? "" : "disabled"}>Craft Now</button>
-        <button id="btnQueueCraft" type="button" class="secondary-btn" data-recipe-id="${htmlEscape(recipe.id)}" ${data.canCraft ? "" : "disabled"}>Queue Timed Craft</button>
+        <button id="btnCraftOnce" class="primary-btn" ${data.canCraft ? "" : "disabled"}>Craft Now</button>
+        <button id="btnQueueCraft" class="secondary-btn" ${data.canCraft ? "" : "disabled"}>Queue Timed Craft</button>
       </div>
     `;
 
@@ -856,18 +680,28 @@ window.GrabLabCrafting = (() => {
     const btnQueueCraft = U.byId("btnQueueCraft");
 
     if (btnCraftOnce) {
-      U.on(btnCraftOnce, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
-        executeCraftNow(btnCraftOnce.dataset.recipeId || recipe.id);
+      U.on(btnCraftOnce, "click", () => {
+        try {
+          craftInstant(recipe.id, 1, {
+            stationTarget: state.selectedStationTarget,
+            outputTarget
+          });
+        } catch (err) {
+          S.addToast(err.message || "Craft failed.", "error");
+        }
       });
     }
 
     if (btnQueueCraft) {
-      U.on(btnQueueCraft, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
-        executeQueueCraft(btnQueueCraft.dataset.recipeId || recipe.id);
+      U.on(btnQueueCraft, "click", () => {
+        try {
+          createCraftingJob(recipe.id, 1, {
+            stationTarget: state.selectedStationTarget,
+            outputTarget
+          });
+        } catch (err) {
+          S.addToast(err.message || "Queue failed.", "error");
+        }
       });
     }
   }
@@ -893,8 +727,8 @@ window.GrabLabCrafting = (() => {
             <div class="meta-sub">Station: ${htmlEscape(job.station || "workbench")} • ${htmlEscape(U.titleCase(job.stationTarget || "base"))}</div>
             <div class="meta-sub">Output: ${htmlEscape(job.outputTarget || "player")}</div>
             <div class="admin-console-actions">
-              <button type="button" class="ghost-btn crafting-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
-              <button type="button" class="secondary-btn crafting-complete-job-btn" data-job-id="${htmlEscape(job.id)}">Complete Now</button>
+              <button class="ghost-btn crafting-cancel-job-btn" data-job-id="${htmlEscape(job.id)}">Cancel Job</button>
+              <button class="secondary-btn crafting-complete-job-btn" data-job-id="${htmlEscape(job.id)}">Complete Now</button>
             </div>
           </div>
         `;
@@ -907,17 +741,13 @@ window.GrabLabCrafting = (() => {
     `;
 
     U.qsa(".crafting-cancel-job-btn", detail).forEach((btn) => {
-      U.on(btn, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
+      U.on(btn, "click", () => {
         cancelCraftingJob(btn.dataset.jobId);
       });
     });
 
     U.qsa(".crafting-complete-job-btn", detail).forEach((btn) => {
-      U.on(btn, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
+      U.on(btn, "click", () => {
         completeCraftingJob(btn.dataset.jobId);
       });
     });
@@ -950,11 +780,7 @@ window.GrabLabCrafting = (() => {
         text: stationId === "all" ? "All" : U.titleCase(stationId)
       });
 
-      btn.type = "button";
-
-      U.on(btn, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
+      U.on(btn, "click", () => {
         setStationFilter(stationId);
       });
 
@@ -967,11 +793,7 @@ window.GrabLabCrafting = (() => {
         text: U.titleCase(targetId)
       });
 
-      btn.type = "button";
-
-      U.on(btn, "click", (evt) => {
-        evt.preventDefault();
-        evt.stopPropagation();
+      U.on(btn, "click", () => {
         setStationTarget(targetId);
       });
 
@@ -988,10 +810,109 @@ window.GrabLabCrafting = (() => {
     renderStationFilters();
   }
 
+  function ensureEssentialCraftingRecipes() {
+    const recipes = getRecipes();
+    const byId = new Set(recipes.map((recipe) => recipe.id));
+    const essential = [
+      {
+        id: "rope_bundle_from_fiber",
+        name: "Twisted Rope Bundle",
+        description: "Twist fresh fiber into a stronger, more useful bundle of rope.",
+        station: "workbench",
+        durationMinutes: 9,
+        inputs: [{ itemId: "fiber_bundle", quantity: 3 }],
+        outputs: [{ itemId: "rope_bundle", quantity: 1 }]
+      },
+      {
+        id: "scrap_wood_from_reeds",
+        name: "Dry Reed Scrap Wood",
+        description: "Bundle and harden reeds into rough building scrap when wood is scarce.",
+        station: "workbench",
+        durationMinutes: 12,
+        inputs: [{ itemId: "fiber_bundle", quantity: 4 }],
+        outputs: [{ itemId: "scrap_wood", quantity: 2 }]
+      },
+      {
+        id: "basic_fishing_net",
+        name: "Basic Fishing Net",
+        description: "A simple net for scooping up small catches and algae.",
+        station: "workbench",
+        durationMinutes: 16,
+        inputs: [
+          { itemId: "fiber_bundle", quantity: 5 },
+          { itemId: "rope_bundle", quantity: 2 }
+        ],
+        outputs: [{ itemId: "fishing_net_basic", quantity: 1 }]
+      },
+      {
+        id: "passive_line_basic",
+        name: "Passive Fishing Line",
+        description: "A set-and-check line for passive fishing.",
+        station: "workbench",
+        durationMinutes: 12,
+        inputs: [
+          { itemId: "fiber_bundle", quantity: 2 },
+          { itemId: "rope_bundle", quantity: 1 },
+          { itemId: "bait_worm", quantity: 1 }
+        ],
+        outputs: [{ itemId: "passive_line_basic", quantity: 1 }]
+      },
+      {
+        id: "improvised_snare_trap",
+        name: "Improvised Snare Trap",
+        description: "A rough reusable land trap for small and medium marsh creatures.",
+        station: "field",
+        durationMinutes: 10,
+        inputs: [
+          { itemId: "fiber_bundle", quantity: 2 },
+          { itemId: "rope_bundle", quantity: 1 },
+          { itemId: "scrap_wood", quantity: 1 }
+        ],
+        outputs: [{ itemId: "improvised_snare_trap", quantity: 1 }]
+      },
+      {
+        id: "reed_fish_trap",
+        name: "Reed Fish Trap",
+        description: "A woven water trap for passive aquatic catches.",
+        station: "field",
+        durationMinutes: 10,
+        inputs: [
+          { itemId: "fiber_bundle", quantity: 3 },
+          { itemId: "rope_bundle", quantity: 1 }
+        ],
+        outputs: [{ itemId: "reed_fish_trap", quantity: 1 }]
+      },
+      {
+        id: "cage_trap_basic",
+        name: "Basic Cage Trap",
+        description: "A sturdier trap with better odds and room for larger land animals.",
+        station: "field",
+        durationMinutes: 15,
+        inputs: [
+          { itemId: "scrap_wood", quantity: 4 },
+          { itemId: "fiber_bundle", quantity: 2 },
+          { itemId: "rope_bundle", quantity: 2 }
+        ],
+        outputs: [{ itemId: "cage_trap_basic", quantity: 1 }]
+      }
+    ];
+
+    let changed = false;
+    essential.forEach((recipe) => {
+      if (!byId.has(recipe.id)) {
+        recipes.push(recipe);
+        changed = true;
+      }
+    });
+
+    if (changed) S.replaceDataBucket("recipes", recipes);
+    return changed;
+  }
+
   function seedFallbackRecipesIfNeeded() {
     const recipes = getRecipes();
     if (recipes.length > 0) {
-      ensureTrapCraftingData();
+      ensureEssentialCraftingRecipes();
       return false;
     }
 
@@ -1027,8 +948,8 @@ window.GrabLabCrafting = (() => {
         id: "improvised_snare_trap",
         name: "Improvised Snare Trap",
         description: "A quick land trap for passive small-creature catches.",
-        station: "field",
-        durationMinutes: 10,
+        station: "workbench",
+        durationMinutes: 12,
         inputs: [
           { itemId: "fiber_bundle", quantity: 2 },
           { itemId: "rope_bundle", quantity: 1 },
@@ -1042,29 +963,14 @@ window.GrabLabCrafting = (() => {
         id: "reed_fish_trap",
         name: "Reed Fish Trap",
         description: "A water trap for passive aquatic catches.",
-        station: "field",
-        durationMinutes: 10,
+        station: "workbench",
+        durationMinutes: 14,
         inputs: [
           { itemId: "fiber_bundle", quantity: 3 },
           { itemId: "rope_bundle", quantity: 1 }
         ],
         outputs: [
           { itemId: "reed_fish_trap", quantity: 1 }
-        ]
-      },
-      {
-        id: "cage_trap_basic",
-        name: "Basic Cage Trap",
-        description: "A sturdier trap with better odds and room for larger land animals.",
-        station: "field",
-        durationMinutes: 15,
-        inputs: [
-          { itemId: "scrap_wood", quantity: 4 },
-          { itemId: "fiber_bundle", quantity: 2 },
-          { itemId: "rope_bundle", quantity: 2 }
-        ],
-        outputs: [
-          { itemId: "cage_trap_basic", quantity: 1 }
         ]
       },
       {
@@ -1111,50 +1017,8 @@ window.GrabLabCrafting = (() => {
     ];
 
     S.replaceDataBucket("recipes", fallback);
-    ensureTrapCraftingData();
+    ensureEssentialCraftingRecipes();
     return true;
-  }
-
-  function bindDelegatedCraftingClicks() {
-    if (state.delegatedClicksBound) return;
-    state.delegatedClicksBound = true;
-
-    document.addEventListener("click", (evt) => {
-      const craftModal = U.byId("craftModal");
-      if (!craftModal || craftModal.classList.contains("hidden")) return;
-      if (!craftModal.contains(evt.target)) return;
-
-      const craftNowBtn = evt.target.closest?.("#btnCraftOnce");
-      if (craftNowBtn) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        executeCraftNow(craftNowBtn.dataset.recipeId || state.selectedRecipeId);
-        return;
-      }
-
-      const queueBtn = evt.target.closest?.("#btnQueueCraft");
-      if (queueBtn) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        executeQueueCraft(queueBtn.dataset.recipeId || state.selectedRecipeId);
-        return;
-      }
-
-      const cancelBtn = evt.target.closest?.(".crafting-cancel-job-btn");
-      if (cancelBtn) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        cancelCraftingJob(cancelBtn.dataset.jobId);
-        return;
-      }
-
-      const completeBtn = evt.target.closest?.(".crafting-complete-job-btn");
-      if (completeBtn) {
-        evt.preventDefault();
-        evt.stopPropagation();
-        completeCraftingJob(completeBtn.dataset.jobId);
-      }
-    }, true);
   }
 
   function bindTickEvents() {
@@ -1166,7 +1030,6 @@ window.GrabLabCrafting = (() => {
 
     U.eventBus.on("modal:opened", (modalId) => {
       if (modalId === "craftModal") {
-        ensureTrapCraftingData();
         renderCraftingPanel();
       }
     });
@@ -1203,8 +1066,7 @@ window.GrabLabCrafting = (() => {
 
     ensureCraftingBuckets();
     seedFallbackRecipesIfNeeded();
-    ensureTrapCraftingData();
-    bindDelegatedCraftingClicks();
+    ensureEssentialCraftingRecipes();
     bindTickEvents();
     renderCraftingPanel();
 
@@ -1244,8 +1106,6 @@ window.GrabLabCrafting = (() => {
 
     createCraftingJob,
     craftInstant,
-    executeCraftNow,
-    executeQueueCraft,
     getCraftingJob,
     updateCraftingJob,
     cancelCraftingJob,
@@ -1259,11 +1119,8 @@ window.GrabLabCrafting = (() => {
     setStationTarget,
     getCraftOutputTargetForStationTarget,
 
-    getRuntimeTrapItems,
-    getRuntimeTrapRecipes,
-    ensureTrapCraftingData,
-
     renderCraftingPanel,
+    ensureEssentialCraftingRecipes,
     seedFallbackRecipesIfNeeded
   };
 

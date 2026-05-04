@@ -1610,3 +1610,139 @@ small {
       0 18px 40px rgba(0,0,0,0.4);
   }
 }
+/* -------------------------------------------------------------------------- */
+/* World Camera / Map Controls                                                */
+/* -------------------------------------------------------------------------- */
+.world-nav-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+}
+
+.world-nav-btn,
+.world-tool-btn {
+  pointer-events: auto;
+  border-radius: 999px;
+  background: rgba(10, 16, 12, 0.76);
+  border: 1px solid rgba(237, 246, 239, 0.16);
+  color: var(--text);
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0.45rem 0.65rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.32);
+  backdrop-filter: blur(8px);
+}
+
+.world-nav-btn:hover,
+.world-tool-btn:hover {
+  background: rgba(130, 209, 115, 0.22);
+  border-color: rgba(130, 209, 115, 0.42);
+}
+
+.world-nav-up,
+.world-nav-down,
+.world-nav-left,
+.world-nav-right {
+  position: absolute;
+}
+
+.world-nav-up {
+  top: 0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.world-nav-down {
+  bottom: 0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.world-nav-left {
+  left: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.world-nav-right {
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.world-zoom-cluster {
+  position: absolute;
+  right: 0.8rem;
+  top: 0.8rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 280px;
+  pointer-events: auto;
+}
+
+.world-tool-btn {
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+#btnWorldToggleLabels,
+#btnWorldToggleBoat {
+  border-radius: 14px;
+  min-width: 64px;
+}
+
+.world-viewport.dragging-map {
+  cursor: grabbing;
+}
+
+.world-viewport.can-drag-map {
+  cursor: grab;
+}
+
+@media (max-width: 800px) {
+  .world-zoom-cluster {
+    left: 0.6rem;
+    right: 0.6rem;
+    top: 0.5rem;
+    max-width: none;
+    justify-content: center;
+  }
+
+  .world-nav-btn,
+  .world-tool-btn {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0.38rem 0.5rem;
+    font-size: 0.82rem;
+  }
+}
+
+.party-control-panel {
+  margin-bottom: 0.85rem;
+}
+
+.party-control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.party-control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  text-align: left;
+  min-height: 82px;
+}
+
+.party-control-btn span,
+.party-control-btn small {
+  color: var(--text-dim);
+  font-weight: 500;
+}
