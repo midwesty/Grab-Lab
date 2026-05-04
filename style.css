@@ -1746,3 +1746,24 @@ small {
   color: var(--text-dim);
   font-weight: 500;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Grab Lab patch: controlled party member + structure map drawings            */
+/* -------------------------------------------------------------------------- */
+.party-mini-card {
+  cursor: pointer;
+  border-color: var(--outline);
+}
+
+.party-mini-card:hover,
+.party-mini-card:focus-visible {
+  border-color: rgba(130, 209, 115, 0.42);
+  background: rgba(32, 48, 37, 0.96);
+}
+
+.party-mini-card.selected {
+  border-color: rgba(130, 209, 115, 0.62);
+  box-shadow:
+    0 0 0 2px rgba(130, 209, 115, 0.14),
+    0 10px 30px var(--shadow);
+}

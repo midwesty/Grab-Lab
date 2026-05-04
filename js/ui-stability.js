@@ -79,6 +79,13 @@ window.GrabLabUIStability = (() => {
     return t < state.userInputGraceUntil || t < state.modalGraceUntil || isUserEditingModal();
   }
 
+  function shouldPreserveOpenModalState() {
+    // Long-running passive ticks fire every few seconds. Re-rendering an open modal from
+    // those ticks destroys nested menu state, scroll position, and selected subpanels.
+    // While a modal is open, only explicit button clicks inside that modal should redraw it.
+    return hasOpenModal();
+  }
+
   function deferRender(key, fn, delay = 80) {
     if (state.renderTimers.has(key)) {
       clearTimeout(state.renderTimers.get(key));
@@ -146,7 +153,7 @@ window.GrabLabUIStability = (() => {
     ui.renderActivityLog?.();
 
     const mapOpen = Boolean(document.querySelector("#mapModal:not(.hidden)"));
-    if (mapOpen) {
+    if (mapOpen && !shouldPreserveOpenModalState()) {
       ui.renderMapModal?.();
     }
 
@@ -165,7 +172,7 @@ window.GrabLabUIStability = (() => {
     const inventoryOpen = Boolean(document.querySelector("#inventoryModal:not(.hidden)"));
     const partyOpen = Boolean(document.querySelector("#partyModal:not(.hidden)"));
 
-    if (!isInInteractionGrace()) {
+    if (!shouldPreserveOpenModalState() && !isInInteractionGrace()) {
       if (inventoryOpen) ui.renderInventoryModal?.();
       if (partyOpen) ui.renderPartyModal?.();
     }
@@ -183,7 +190,7 @@ window.GrabLabUIStability = (() => {
     const partyOpen = Boolean(document.querySelector("#partyModal:not(.hidden)"));
     const inventoryOpen = Boolean(document.querySelector("#inventoryModal:not(.hidden)"));
 
-    if (!isInInteractionGrace()) {
+    if (!shouldPreserveOpenModalState() && !isInInteractionGrace()) {
       if (partyOpen) ui.renderPartyModal?.();
       if (inventoryOpen) ui.renderInventoryModal?.();
     }
@@ -201,7 +208,7 @@ window.GrabLabUIStability = (() => {
     const partyOpen = Boolean(document.querySelector("#partyModal:not(.hidden)"));
     const dnaOpen = Boolean(document.querySelector("#dnaModal:not(.hidden)"));
 
-    if (isInInteractionGrace()) {
+    if (shouldPreserveOpenModalState() || isInInteractionGrace()) {
       ui.renderPartyMini?.();
       ui.renderNearbyList?.();
       ui.renderSidebarCollapseStates?.();
@@ -229,7 +236,7 @@ window.GrabLabUIStability = (() => {
     const buildOpen = Boolean(document.querySelector("#buildModal:not(.hidden)"));
     const partyOpen = Boolean(document.querySelector("#partyModal:not(.hidden)"));
 
-    if (isInInteractionGrace()) {
+    if (shouldPreserveOpenModalState() || isInInteractionGrace()) {
       ui.renderPartyMini?.();
       ui.renderSidebarCollapseStates?.();
       window.GL_UI_ICONS?.scheduleDecorate?.();
@@ -255,7 +262,7 @@ window.GrabLabUIStability = (() => {
     const trapsOpen = Boolean(document.querySelector("#trapsModal:not(.hidden)"));
     const baseOpen = Boolean(document.querySelector("#baseModal:not(.hidden)"));
 
-    if (isInInteractionGrace()) {
+    if (shouldPreserveOpenModalState() || isInInteractionGrace()) {
       ui.renderHud?.();
       ui.renderSidebarCollapseStates?.();
       window.GL_UI_ICONS?.scheduleDecorate?.();
@@ -280,7 +287,7 @@ window.GrabLabUIStability = (() => {
     ui.renderTrackedTasks?.();
 
     const journalOpen = Boolean(document.querySelector("#journalModal:not(.hidden)"));
-    if (journalOpen && !isInInteractionGrace()) {
+    if (journalOpen && !shouldPreserveOpenModalState() && !isInInteractionGrace()) {
       ui.renderJournalModal?.();
     }
   }
@@ -292,7 +299,7 @@ window.GrabLabUIStability = (() => {
     ui.renderNearbyList?.();
 
     const mapOpen = Boolean(document.querySelector("#mapModal:not(.hidden)"));
-    if (mapOpen) {
+    if (mapOpen && !shouldPreserveOpenModalState()) {
       ui.renderMapModal?.();
     }
 
@@ -430,6 +437,7 @@ window.GrabLabUIStability = (() => {
       getTopOpenModalId,
       isUserEditingModal,
       isInInteractionGrace,
+      shouldPreserveOpenModalState,
       safeRenderHud,
       safeRenderRightColumn,
       safeRenderBaseChanged,
@@ -455,6 +463,7 @@ window.GrabLabUIStability = (() => {
     getTopOpenModalId,
     isUserEditingModal,
     isInInteractionGrace,
+    shouldPreserveOpenModalState,
     safeRenderHud,
     safeRenderRightColumn,
     safeRenderBaseChanged,

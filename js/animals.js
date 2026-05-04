@@ -194,7 +194,8 @@ window.GrabLabAnimals = (() => {
       genetics: U.deepMerge({
         generation: Number(options.genetics?.generation || 1),
         lineage: U.toArray(options.genetics?.lineage),
-        dominantTraits: U.toArray(options.genetics?.dominantTraits),
+        ancestry: U.uniqueBy([speciesId, ...U.toArray(options.genetics?.ancestry)], (x) => String(x)),
+        dominantTraits: U.toArray(options.genetics?.dominantTraits).length ? U.toArray(options.genetics?.dominantTraits) : mergedTraits.slice(0, 4),
         recessiveTraits: U.toArray(options.genetics?.recessiveTraits)
       }, options.genetics || {}),
       combatMoves: U.toArray(options.combatMoves).length ? U.toArray(options.combatMoves) : U.toArray(def?.combatMoves),

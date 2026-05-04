@@ -164,26 +164,8 @@ window.GrabLabBreeding = (() => {
       return { ok: false, reason: "Cross-species breeding unlocks at player level 3." };
     }
 
-    if (a.speciesId !== b.speciesId) {
-      const aDef = S.getAnimalDef(a.speciesId);
-      const bDef = S.getAnimalDef(b.speciesId);
-
-      const aFamily = a.family || aDef?.family || "unknown";
-      const bFamily = b.family || bDef?.family || "unknown";
-
-      const allowedByTag =
-        U.toArray(aDef?.crossBreedWith).includes(b.speciesId) ||
-        U.toArray(bDef?.crossBreedWith).includes(a.speciesId) ||
-        aFamily === bFamily;
-
-      if (!allowedByTag) {
-        return {
-          ok: false,
-          reason: "Those species are too genetically distant. Same-family or explicitly compatible species can crossbreed."
-        };
-      }
-    }
-
+    // Any two animal specimens may cross-breed once the player reaches level 3.
+    // Do not apply family/species compatibility gates here; the game fantasy is broad hybridization.
     return { ok: true };
   }
 
@@ -289,9 +271,17 @@ window.GrabLabBreeding = (() => {
   }
 
   function getInheritedTraits(a, b, additive = null) {
+    const aDef = S.getAnimalDef(a.speciesId) || {};
+    const bDef = S.getAnimalDef(b.speciesId) || {};
     const pool = U.uniqueBy([
+      ...U.toArray(aDef.traits),
+      ...U.toArray(bDef.traits),
       ...U.toArray(a.traits),
-      ...U.toArray(b.traits)
+      ...U.toArray(b.traits),
+      ...U.toArray(a.genetics?.dominantTraits),
+      ...U.toArray(b.genetics?.dominantTraits),
+      ...U.toArray(a.genetics?.recessiveTraits),
+      ...U.toArray(b.genetics?.recessiveTraits)
     ], (x) => String(x));
 
     const inherited = [];
@@ -437,6 +427,19 @@ window.GrabLabBreeding = (() => {
           a.id,
           b.id
         ], (x) => String(x)),
+        ancestry: U.uniqueBy([
+          ...U.toArray(a.genetics?.ancestry),
+          ...U.toArray(b.genetics?.ancestry),
+          a.speciesId,
+          b.speciesId
+        ], (x) => String(x)),
+        dominantTraits: U.uniqueBy(traits.filter(() => Math.random() < 0.64), (x) => String(x)),
+        recessiveTraits: U.uniqueBy([
+          ...U.toArray(a.traits),
+          ...U.toArray(b.traits),
+          ...U.toArray(a.genetics?.recessiveTraits),
+          ...U.toArray(b.genetics?.recessiveTraits)
+        ].filter((trait) => !traits.includes(trait) || Math.random() < 0.35), (x) => String(x)).slice(0, 10),
         parentAId: a.id,
         parentBId: b.id,
         parentASpeciesId: a.speciesId,

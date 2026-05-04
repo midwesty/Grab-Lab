@@ -815,6 +815,15 @@ window.GrabLabCrafting = (() => {
     const byId = new Set(recipes.map((recipe) => recipe.id));
     const essential = [
       {
+        id: "hand_twist_rope_bundle",
+        name: "Hand-Twisted Rope Bundle",
+        description: "Twist plant fiber into rope without needing a station. Slower, but always available.",
+        station: "field",
+        durationMinutes: 14,
+        inputs: [{ itemId: "fiber_bundle", quantity: 3 }],
+        outputs: [{ itemId: "rope_bundle", quantity: 1 }]
+      },
+      {
         id: "rope_bundle_from_fiber",
         name: "Twisted Rope Bundle",
         description: "Twist fresh fiber into a stronger, more useful bundle of rope.",

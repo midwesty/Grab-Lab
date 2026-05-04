@@ -769,6 +769,187 @@ window.GrabLabWorld = (() => {
     ctx.fillRect(px + 3, py + 3, 2, 8);
   }
 
+
+  function getStructureKind(poi = {}) {
+    const id = String(poi.structureId || poi.id || "").toLowerCase();
+    const category = String(poi.category || "").toLowerCase();
+    const habitatType = String(poi.habitatType || poi.structureHabitatType || "").toLowerCase();
+
+    if (id.includes("aquarium") || habitatType === "aquarium" || poi.water) return "aquarium";
+    if (id.includes("aviary") || habitatType === "aviary" || poi.flying) return "aviary";
+    if (id.includes("pen") || category === "habitat" || habitatType === "general") return "pen";
+    if (id.includes("stove") || id.includes("cook")) return "stove";
+    if (id.includes("workbench") || id.includes("bench")) return "workbench";
+    if (id.includes("breeding") || id.includes("tank")) return "breeding_tank";
+    if (id.includes("storage") || id.includes("crate")) return "storage";
+    if (id.includes("trap")) return "trap";
+    if (id.includes("dock")) return "dock_structure";
+    return "utility";
+  }
+
+  function drawStructureTileImage(ctx, poi, rect, selected = false) {
+    const pad = Math.max(4, rect.size * 0.08);
+    const x = rect.x + pad;
+    const y = rect.y + pad;
+    const w = rect.size - pad * 2;
+    const h = rect.size - pad * 2;
+    const cx = rect.x + rect.size / 2;
+    const cy = rect.y + rect.size / 2;
+    const kind = getStructureKind(poi);
+
+    ctx.save();
+    ctx.globalAlpha = 0.96;
+
+    // Keep the green expansion/highlight language while allowing the structure drawing to be unique.
+    ctx.fillStyle = "rgba(130, 209, 115, 0.17)";
+    drawRoundedRect(ctx, rect.x + 2, rect.y + 2, rect.size - 4, rect.size - 4, Math.max(6, rect.size * 0.12));
+    ctx.fill();
+    ctx.strokeStyle = selected ? "rgba(237, 246, 239, 0.95)" : "rgba(130, 209, 115, 0.65)";
+    ctx.lineWidth = selected ? 3 : 2;
+    drawRoundedRect(ctx, rect.x + 3, rect.y + 3, rect.size - 6, rect.size - 6, Math.max(6, rect.size * 0.12));
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(13, 31, 17, 0.72)";
+    drawRoundedRect(ctx, x, y, w, h, Math.max(5, rect.size * 0.1));
+    ctx.fill();
+
+    ctx.lineWidth = Math.max(2, rect.size * 0.035);
+    ctx.strokeStyle = "rgba(237,246,239,0.72)";
+    ctx.fillStyle = "#edf6ef";
+
+    if (kind === "aquarium") {
+      ctx.fillStyle = "rgba(126, 200, 255, 0.62)";
+      drawRoundedRect(ctx, x + w * 0.14, y + h * 0.2, w * 0.72, h * 0.58, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.18, y + h * 0.45);
+      ctx.quadraticCurveTo(cx, y + h * 0.32, x + w * 0.82, y + h * 0.45);
+      ctx.stroke();
+      ctx.fillStyle = "#edf6ef";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + h * 0.08, w * 0.16, h * 0.08, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.17, cy + h * 0.08);
+      ctx.lineTo(cx - w * 0.29, cy);
+      ctx.lineTo(cx - w * 0.29, cy + h * 0.16);
+      ctx.closePath();
+      ctx.fill();
+    } else if (kind === "aviary") {
+      ctx.strokeStyle = "rgba(183, 242, 143, 0.8)";
+      for (let i = 0; i < 4; i += 1) {
+        const xx = x + w * (0.18 + i * 0.21);
+        ctx.beginPath();
+        ctx.moveTo(xx, y + h * 0.15);
+        ctx.lineTo(xx, y + h * 0.82);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, w * 0.36, Math.PI, 0);
+      ctx.stroke();
+      ctx.strokeRect(x + w * 0.16, y + h * 0.45, w * 0.68, h * 0.37);
+      ctx.fillStyle = "#edf6ef";
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.2, cy + h * 0.02);
+      ctx.quadraticCurveTo(cx - w * 0.03, cy - h * 0.2, cx + w * 0.2, cy + h * 0.02);
+      ctx.quadraticCurveTo(cx, cy - h * 0.05, cx - w * 0.2, cy + h * 0.02);
+      ctx.fill();
+    } else if (kind === "pen") {
+      ctx.strokeStyle = "rgba(255, 240, 229, 0.86)";
+      for (let i = 0; i < 4; i += 1) {
+        const xx = x + w * (0.18 + i * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(xx, y + h * 0.24);
+        ctx.lineTo(xx, y + h * 0.78);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.12, y + h * 0.36);
+      ctx.lineTo(x + w * 0.88, y + h * 0.36);
+      ctx.moveTo(x + w * 0.12, y + h * 0.62);
+      ctx.lineTo(x + w * 0.88, y + h * 0.62);
+      ctx.stroke();
+      ctx.fillStyle = "#edf6ef";
+      ctx.beginPath();
+      ctx.ellipse(cx, y + h * 0.57, w * 0.17, h * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + w * 0.14, y + h * 0.49, w * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "stove") {
+      ctx.fillStyle = "rgba(40, 48, 37, 0.95)";
+      drawRoundedRect(ctx, x + w * 0.18, y + h * 0.32, w * 0.64, h * 0.46, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#ffd166";
+      ctx.beginPath();
+      ctx.moveTo(cx, y + h * 0.12);
+      ctx.bezierCurveTo(cx + w * 0.18, y + h * 0.32, cx - w * 0.18, y + h * 0.3, cx, y + h * 0.5);
+      ctx.bezierCurveTo(cx - w * 0.12, y + h * 0.35, cx + w * 0.1, y + h * 0.3, cx, y + h * 0.12);
+      ctx.fill();
+      ctx.fillStyle = "#f76b6b";
+      ctx.fillRect(cx - w * 0.18, y + h * 0.5, w * 0.36, h * 0.05);
+    } else if (kind === "workbench") {
+      ctx.fillStyle = "#be9f6c";
+      ctx.fillRect(x + w * 0.14, y + h * 0.44, w * 0.72, h * 0.14);
+      ctx.fillRect(x + w * 0.2, y + h * 0.58, w * 0.1, h * 0.25);
+      ctx.fillRect(x + w * 0.7, y + h * 0.58, w * 0.1, h * 0.25);
+      ctx.strokeStyle = "rgba(237,246,239,0.82)";
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.32, y + h * 0.33);
+      ctx.lineTo(x + w * 0.52, y + h * 0.2);
+      ctx.lineTo(x + w * 0.58, y + h * 0.3);
+      ctx.lineTo(x + w * 0.38, y + h * 0.43);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (kind === "breeding_tank") {
+      ctx.strokeStyle = "rgba(215, 124, 255, 0.86)";
+      ctx.fillStyle = "rgba(126, 200, 255, 0.35)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, w * 0.28, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(215, 124, 255, 0.55)";
+      ctx.beginPath();
+      ctx.arc(cx - w * 0.08, cy - h * 0.06, w * 0.07, 0, Math.PI * 2);
+      ctx.arc(cx + w * 0.1, cy + h * 0.08, w * 0.05, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "storage") {
+      ctx.fillStyle = "#8b6a3f";
+      drawRoundedRect(ctx, x + w * 0.16, y + h * 0.32, w * 0.68, h * 0.46, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.16, y + h * 0.46);
+      ctx.lineTo(x + w * 0.84, y + h * 0.46);
+      ctx.moveTo(cx, y + h * 0.32);
+      ctx.lineTo(cx, y + h * 0.78);
+      ctx.stroke();
+    } else if (kind === "trap") {
+      ctx.strokeStyle = "rgba(237,246,239,0.88)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, w * 0.26, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.26, cy);
+      ctx.lineTo(cx + w * 0.26, cy);
+      ctx.moveTo(cx, cy - h * 0.26);
+      ctx.lineTo(cx, cy + h * 0.26);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#edf6ef";
+      ctx.fillRect(cx - w * 0.22, cy - h * 0.22, w * 0.44, h * 0.44);
+      ctx.strokeRect(cx - w * 0.22, cy - h * 0.22, w * 0.44, h * 0.44);
+      ctx.fillStyle = "#82d173";
+      ctx.fillRect(cx - w * 0.07, cy - h * 0.32, w * 0.14, h * 0.64);
+      ctx.fillRect(cx - w * 0.32, cy - h * 0.07, w * 0.64, h * 0.14);
+    }
+
+    ctx.restore();
+  }
+
   function drawPoiGlyph(ctx, poi, px, py, style) {
     switch (style.kind) {
       case "npc":
@@ -876,23 +1057,27 @@ window.GrabLabWorld = (() => {
       ctx.globalAlpha = distance > 3 ? 0.56 : 0.76;
     }
 
-    ctx.fillStyle = style.fill;
-    ctx.beginPath();
-    ctx.arc(px, py, selected ? style.radius * 1.18 * pulse : style.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = style.stroke;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    drawPoiGlyph(ctx, poi, px, py, style);
-
-    if (selected) {
-      ctx.strokeStyle = "rgba(255,255,255,0.85)";
-      ctx.lineWidth = 2;
+    if (poi.type === "base_structure") {
+      drawStructureTileImage(ctx, poi, rect, selected);
+    } else {
+      ctx.fillStyle = style.fill;
       ctx.beginPath();
-      ctx.arc(px, py, (style.radius + 6) * pulse, 0, Math.PI * 2);
+      ctx.arc(px, py, selected ? style.radius * 1.18 * pulse : style.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = style.stroke;
+      ctx.lineWidth = 2;
       ctx.stroke();
+
+      drawPoiGlyph(ctx, poi, px, py, style);
+
+      if (selected) {
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, py, (style.radius + 6) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     if (state.labelsVisible) {

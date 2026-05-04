@@ -1,18 +1,117 @@
 [
-  { "id": "steady_hands", "name": "Steady Hands", "description": "Better precision for fishing, medicine, and fine tasks." },
-  { "id": "field_notebook", "name": "Field Notebook", "description": "More efficient observation and tracking progress." },
-  { "id": "weird_luck", "name": "Weird Luck", "description": "Odd good fortune in unlikely situations." },
-  { "id": "boat_brain", "name": "Boat Brain", "description": "Knows their way around maintenance, fuel, and river travel." },
-
-  { "id": "gills", "name": "Gills", "description": "Improved underwater breathing and aquatic adaptation." },
-  { "id": "schooling", "name": "Schooling", "description": "Works well in groups and gains cooperative bonuses." },
-  { "id": "jump", "name": "Jump", "description": "Improved mobility and evasive movement." },
-  { "id": "wet_skin", "name": "Wet Skin", "description": "Performs better in damp environments." },
-  { "id": "shell", "name": "Shell", "description": "Protective body armor." },
-  { "id": "swim", "name": "Swim", "description": "Strong movement in water." },
-  { "id": "keen_nose", "name": "Keen Nose", "description": "Better at tracking, scouting, and detecting danger." },
-  { "id": "camouflage", "name": "Camouflage", "description": "Better stealth and concealment." },
-  { "id": "flight", "name": "Flight", "description": "Can fly or glide." },
-  { "id": "luminous", "name": "Luminous", "description": "Glows in darkness." },
-  { "id": "claws", "name": "Claws", "description": "Improved slashing or grappling attacks." }
+  {
+    "id": "steady_hands",
+    "name": "Steady Hands",
+    "description": "Better precision for fishing, medicine, and fine tasks."
+  },
+  {
+    "id": "field_notebook",
+    "name": "Field Notebook",
+    "description": "More efficient observation and tracking progress."
+  },
+  {
+    "id": "weird_luck",
+    "name": "Weird Luck",
+    "description": "Odd good fortune in unlikely situations."
+  },
+  {
+    "id": "boat_brain",
+    "name": "Boat Brain",
+    "description": "Knows their way around maintenance, fuel, and river travel."
+  },
+  {
+    "id": "gills",
+    "name": "Gills",
+    "description": "Improved underwater breathing and aquatic adaptation."
+  },
+  {
+    "id": "schooling",
+    "name": "Schooling",
+    "description": "Works well in groups and gains cooperative bonuses."
+  },
+  {
+    "id": "jump",
+    "name": "Jump",
+    "description": "Improved mobility and evasive movement."
+  },
+  {
+    "id": "wet_skin",
+    "name": "Wet Skin",
+    "description": "Performs better in damp environments."
+  },
+  {
+    "id": "shell",
+    "name": "Shell",
+    "description": "Protective body armor."
+  },
+  {
+    "id": "swim",
+    "name": "Swim",
+    "description": "Strong movement in water."
+  },
+  {
+    "id": "keen_nose",
+    "name": "Keen Nose",
+    "description": "Better at tracking, scouting, and detecting danger."
+  },
+  {
+    "id": "camouflage",
+    "name": "Camouflage",
+    "description": "Better stealth and concealment."
+  },
+  {
+    "id": "flight",
+    "name": "Flight",
+    "description": "Can fly or glide."
+  },
+  {
+    "id": "luminous",
+    "name": "Luminous",
+    "description": "Glows in darkness."
+  },
+  {
+    "id": "claws",
+    "name": "Claws",
+    "description": "Improved slashing or grappling attacks."
+  },
+  {
+    "id": "fins",
+    "name": "Fins",
+    "description": "Improves swimming and deep-water movement."
+  },
+  {
+    "id": "wings",
+    "name": "Wings",
+    "description": "Allows flying or gliding access to elevated terrain."
+  },
+  {
+    "id": "climbing",
+    "name": "Climbing",
+    "description": "Improves access to cliffs, trees, and rough terrain."
+  },
+  {
+    "id": "burrowing",
+    "name": "Burrowing",
+    "description": "Can dig through soft soil, mud, and hidden passages."
+  },
+  {
+    "id": "night_vision",
+    "name": "Night Vision",
+    "description": "Improves scouting and activity in dark areas."
+  },
+  {
+    "id": "spore_resistant",
+    "name": "Spore Resistant",
+    "description": "Better resistance to fungal exposure."
+  },
+  {
+    "id": "strong_jaw",
+    "name": "Strong Jaw",
+    "description": "Improves bite attacks and carrying small items."
+  },
+  {
+    "id": "adhesive_feet",
+    "name": "Adhesive Feet",
+    "description": "Improves climbing and wet-surface movement."
+  }
 ]

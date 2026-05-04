@@ -230,12 +230,39 @@ window.GrabLabUI = (() => {
       return;
     }
 
+    const controlledId = S.getRuntime()?.activeAvatarId || "player";
+
     entries.forEach((entry) => {
-      const row = U.createEl("div");
+      const row = U.createEl("div", {
+        className: entry.id === controlledId ? "party-mini-card selected" : "party-mini-card",
+        attrs: {
+          role: "button",
+          tabindex: "0",
+          title: `Control ${entry.name}`
+        }
+      });
       const portrait = U.createEl("div", { className: "mini-portrait" });
       const meta = U.createEl("div");
-      const title = U.createEl("div", { className: "meta-title", text: entry.name });
-      const sub = U.createEl("div", { className: "meta-sub", text: entry.sub });
+      const title = U.createEl("div", { className: "meta-title", text: `${entry.id === controlledId ? "▶ " : ""}${entry.name}` });
+      const sub = U.createEl("div", { className: "meta-sub", text: `${entry.sub} • Click to control` });
+
+      U.on(row, "click", () => {
+        if (window.GL_PARTY_CONTROL?.setControlledAvatar) {
+          window.GL_PARTY_CONTROL.setControlledAvatar(entry.id || "player");
+        } else {
+          S.updateRuntime({ activeAvatarId: entry.id || "player" });
+          S.addToast(`Now controlling ${entry.name}.`, "success");
+          window.GL_WORLD?.drawWorld?.();
+        }
+        renderPartyMini();
+      });
+
+      U.on(row, "keydown", (evt) => {
+        if (evt.key === "Enter" || evt.key === " ") {
+          evt.preventDefault();
+          row.click();
+        }
+      });
 
       meta.append(title, sub);
       row.append(portrait, meta);
@@ -1838,26 +1865,34 @@ window.GrabLabUI = (() => {
   }
 
   function renderEverything() {
+    const preserveOpenModal = Boolean(window.GL_UI_STABILITY?.shouldPreserveOpenModalState?.());
+
     renderHud();
     renderStatusEffects();
     renderTrackedTasks();
     renderPartyMini();
     renderNearbyList();
     renderActivityLog();
-    renderInventoryModal();
-    renderPartyModal();
-    renderBoatModal();
-    renderBaseModal();
-    renderBuildModal();
-    renderTrapsModal();
-    renderCraftModal();
-    renderDnaModal();
-    renderFishingModal();
-    renderJournalModal();
-    renderTutorialModal();
-    renderSettingsModal();
-    renderAdminModal();
-    renderMapModal();
+
+    // Passive ticks and broad renderEverything() calls should not rebuild open modal bodies.
+    // Rebuilding the DOM is what made submenus jump back to their main tab every few seconds.
+    if (!preserveOpenModal) {
+      renderInventoryModal();
+      renderPartyModal();
+      renderBoatModal();
+      renderBaseModal();
+      renderBuildModal();
+      renderTrapsModal();
+      renderCraftModal();
+      renderDnaModal();
+      renderFishingModal();
+      renderJournalModal();
+      renderTutorialModal();
+      renderSettingsModal();
+      renderAdminModal();
+      renderMapModal();
+    }
+
     renderCombatShell();
     renderMiniMapVisibility();
     renderSidebarCollapseStates();

@@ -1,16 +1,44 @@
 [
   {
+    "id": "hand_twist_rope_bundle",
+    "name": "Hand-Twisted Rope Bundle",
+    "description": "Twist plant fiber into rope without needing a station. Slower, but always available.",
+    "station": "field",
+    "durationMinutes": 14,
+    "inputs": [
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 3
+      }
+    ],
+    "outputs": [
+      {
+        "itemId": "rope_bundle",
+        "quantity": 1
+      }
+    ]
+  },
+  {
     "id": "bandage_basic",
     "name": "Basic Bandage",
     "description": "A simple field dressing.",
     "station": "workbench",
     "durationMinutes": 10,
     "inputs": [
-      { "itemId": "fiber_bundle", "quantity": 2 },
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 2
+      },
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "bandage_basic", "quantity": 1 }
+      {
+        "itemId": "bandage_basic",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -20,10 +48,16 @@
     "station": "workbench",
     "durationMinutes": 5,
     "inputs": [
-      { "itemId": "berries_wild", "quantity": 1 }
+      {
+        "itemId": "berries_wild",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "bait_worm", "quantity": 2 }
+      {
+        "itemId": "bait_worm",
+        "quantity": 2
+      }
     ]
   },
   {
@@ -33,10 +67,16 @@
     "station": "stove",
     "durationMinutes": 8,
     "inputs": [
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "clean_water", "quantity": 1 }
+      {
+        "itemId": "clean_water",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -46,12 +86,24 @@
     "station": "workbench",
     "durationMinutes": 15,
     "inputs": [
-      { "itemId": "fresh_water", "quantity": 1 },
-      { "itemId": "alcohol_basic", "quantity": 1 },
-      { "itemId": "chameleon_skin", "quantity": 1 }
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      },
+      {
+        "itemId": "alcohol_basic",
+        "quantity": 1
+      },
+      {
+        "itemId": "chameleon_skin",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "chameleon_juice", "quantity": 1 }
+      {
+        "itemId": "chameleon_juice",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -61,10 +113,16 @@
     "station": "workbench",
     "durationMinutes": 12,
     "inputs": [
-      { "itemId": "dock_turtle_egg", "quantity": 1 }
+      {
+        "itemId": "dock_turtle_egg",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "shell_powder", "quantity": 1 }
+      {
+        "itemId": "shell_powder",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -74,11 +132,20 @@
     "station": "breeding_tank",
     "durationMinutes": 18,
     "inputs": [
-      { "itemId": "mold_sample_jar", "quantity": 1 },
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "mold_sample_jar",
+        "quantity": 1
+      },
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "luminous_spores", "quantity": 1 }
+      {
+        "itemId": "luminous_spores",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -88,10 +155,16 @@
     "station": "workbench",
     "durationMinutes": 9,
     "inputs": [
-      { "itemId": "fiber_bundle", "quantity": 3 }
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 3
+      }
     ],
     "outputs": [
-      { "itemId": "rope_bundle", "quantity": 1 }
+      {
+        "itemId": "rope_bundle",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -101,12 +174,24 @@
     "station": "workbench",
     "durationMinutes": 11,
     "inputs": [
-      { "itemId": "old_boot", "quantity": 1 },
-      { "itemId": "fiber_bundle", "quantity": 1 },
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "old_boot",
+        "quantity": 1
+      },
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 1
+      },
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "bandage_basic", "quantity": 1 }
+      {
+        "itemId": "bandage_basic",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -116,12 +201,24 @@
     "station": "workbench",
     "durationMinutes": 14,
     "inputs": [
-      { "itemId": "broken_lure", "quantity": 1 },
-      { "itemId": "rope_bundle", "quantity": 1 },
-      { "itemId": "fiber_bundle", "quantity": 1 }
+      {
+        "itemId": "broken_lure",
+        "quantity": 1
+      },
+      {
+        "itemId": "rope_bundle",
+        "quantity": 1
+      },
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "passive_line_basic", "quantity": 1 }
+      {
+        "itemId": "passive_line_basic",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -131,11 +228,20 @@
     "station": "workbench",
     "durationMinutes": 8,
     "inputs": [
-      { "itemId": "mud_shrimp", "quantity": 1 },
-      { "itemId": "fiber_bundle", "quantity": 1 }
+      {
+        "itemId": "mud_shrimp",
+        "quantity": 1
+      },
+      {
+        "itemId": "fiber_bundle",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "frog_lure", "quantity": 1 }
+      {
+        "itemId": "frog_lure",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -145,12 +251,24 @@
     "station": "stove",
     "durationMinutes": 18,
     "inputs": [
-      { "itemId": "berries_wild", "quantity": 2 },
-      { "itemId": "algae_bundle", "quantity": 1 },
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "berries_wild",
+        "quantity": 2
+      },
+      {
+        "itemId": "algae_bundle",
+        "quantity": 1
+      },
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "alcohol_basic", "quantity": 1 }
+      {
+        "itemId": "alcohol_basic",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -160,12 +278,24 @@
     "station": "stove",
     "durationMinutes": 20,
     "inputs": [
-      { "itemId": "algae_bundle", "quantity": 2 },
-      { "itemId": "alcohol_basic", "quantity": 1 },
-      { "itemId": "scrap_wood", "quantity": 1 }
+      {
+        "itemId": "algae_bundle",
+        "quantity": 2
+      },
+      {
+        "itemId": "alcohol_basic",
+        "quantity": 1
+      },
+      {
+        "itemId": "scrap_wood",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "fuel_bio_basic", "quantity": 1 }
+      {
+        "itemId": "fuel_bio_basic",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -175,10 +305,16 @@
     "station": "workbench",
     "durationMinutes": 6,
     "inputs": [
-      { "itemId": "mud_minnow_catch", "quantity": 1 }
+      {
+        "itemId": "mud_minnow_catch",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "bait_worm", "quantity": 2 }
+      {
+        "itemId": "bait_worm",
+        "quantity": 2
+      }
     ]
   },
   {
@@ -188,10 +324,16 @@
     "station": "workbench",
     "durationMinutes": 7,
     "inputs": [
-      { "itemId": "bog_perch_catch", "quantity": 1 }
+      {
+        "itemId": "bog_perch_catch",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "frog_lure", "quantity": 1 }
+      {
+        "itemId": "frog_lure",
+        "quantity": 1
+      }
     ]
   },
   {
@@ -201,11 +343,20 @@
     "station": "stove",
     "durationMinutes": 7,
     "inputs": [
-      { "itemId": "shell_powder", "quantity": 1 },
-      { "itemId": "fresh_water", "quantity": 1 }
+      {
+        "itemId": "shell_powder",
+        "quantity": 1
+      },
+      {
+        "itemId": "fresh_water",
+        "quantity": 1
+      }
     ],
     "outputs": [
-      { "itemId": "clean_water", "quantity": 1 }
+      {
+        "itemId": "clean_water",
+        "quantity": 1
+      }
     ]
   }
 ]

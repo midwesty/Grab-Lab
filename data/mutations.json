@@ -28,5 +28,50 @@
     "id": "luminous",
     "name": "Luminous",
     "description": "Emits a gentle glow in dark areas."
+  },
+  {
+    "id": "fins",
+    "name": "Fins",
+    "description": "Adds stronger aquatic movement and deep-water access."
+  },
+  {
+    "id": "wings",
+    "name": "Wings",
+    "description": "Adds flight or glide potential for elevated access."
+  },
+  {
+    "id": "bright_eyes",
+    "name": "Bright Eyes",
+    "description": "Improves awareness, scouting, and night activity."
+  },
+  {
+    "id": "odd_coloration",
+    "name": "Odd Coloration",
+    "description": "Unusual coloration that may affect stealth, display, or breeding value."
+  },
+  {
+    "id": "hardy",
+    "name": "Hardy",
+    "description": "Improves general resilience and survival."
+  },
+  {
+    "id": "quick_reflexes",
+    "name": "Quick Reflexes",
+    "description": "Improves speed and reaction time."
+  },
+  {
+    "id": "spore_touched",
+    "name": "Spore-Touched",
+    "description": "A fungal mutation with unpredictable uses and risks."
+  },
+  {
+    "id": "adhesive_feet",
+    "name": "Adhesive Feet",
+    "description": "Improves climbing and wet-surface travel."
+  },
+  {
+    "id": "night_vision",
+    "name": "Night Vision",
+    "description": "Improves movement and scouting in dark locations."
   }
 ]
