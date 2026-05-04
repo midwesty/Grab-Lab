@@ -770,6 +770,51 @@ window.GrabLabWorld = (() => {
   }
 
 
+  function getSpeciesGlyph(poi = {}) {
+    const id = String(poi.speciesId || poi.id || poi.name || "").toLowerCase();
+    if (id.includes("marsy")) return "🦝";
+    if (id.includes("minnow") || id.includes("fish") || id.includes("carp") || id.includes("eel")) return "🐟";
+    if (id.includes("hopper") || id.includes("frog")) return "🐸";
+    if (id.includes("turtle")) return "🐢";
+    if (id.includes("fox")) return "🦊";
+    if (id.includes("moth") || id.includes("spore")) return "🦋";
+    if (id.includes("crab")) return "🦀";
+    return "🐾";
+  }
+
+  function getPlantGlyph(poi = {}) {
+    const id = String(poi.plantId || poi.id || poi.name || "").toLowerCase();
+    if (id.includes("berry")) return "🫐";
+    if (id.includes("algae")) return "🟢";
+    if (id.includes("glow") || id.includes("spore") || id.includes("fung")) return "🍄";
+    if (id.includes("bog") || id.includes("bulb")) return "💧";
+    if (id.includes("reed")) return "🌾";
+    return "🌿";
+  }
+
+  function getItemPoiGlyph(poi = {}) {
+    const id = String(poi.itemId || poi.harvestItemId || poi.id || poi.name || "").toLowerCase();
+    if (id.includes("water")) return "💧";
+    if (id.includes("wood")) return "🪵";
+    if (id.includes("rope")) return "🧵";
+    if (id.includes("berry")) return "🫐";
+    if (id.includes("bait") || id.includes("worm")) return "🪱";
+    if (id.includes("mold") || id.includes("spore")) return "🍄";
+    if (id.includes("boot")) return "🥾";
+    if (id.includes("lure")) return "🎣";
+    return "✦";
+  }
+
+  function drawEmojiGlyph(ctx, glyph, px, py, size = 19) {
+    ctx.save();
+    ctx.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(glyph, px, py + 1);
+    ctx.restore();
+  }
+
+
   function getStructureKind(poi = {}) {
     const id = String(poi.structureId || poi.id || "").toLowerCase();
     const category = String(poi.category || "").toLowerCase();
@@ -956,16 +1001,16 @@ window.GrabLabWorld = (() => {
         drawNpcGlyph(ctx, px, py);
         break;
       case "animal":
-        drawAnimalGlyph(ctx, px, py);
+        drawEmojiGlyph(ctx, getSpeciesGlyph(poi), px, py, 20);
         break;
       case "fish":
-        drawFishGlyph(ctx, px, py);
+        drawEmojiGlyph(ctx, "🎣", px, py, 19);
         break;
       case "fungus":
-        drawFungusGlyph(ctx, px, py);
+        drawEmojiGlyph(ctx, getPlantGlyph(poi), px, py, 20);
         break;
       case "resource":
-        drawResourceGlyph(ctx, px, py);
+        drawEmojiGlyph(ctx, poi.plantId ? getPlantGlyph(poi) : getItemPoiGlyph(poi), px, py, 20);
         break;
       case "dock":
         drawDockGlyph(ctx, px, py);
@@ -988,7 +1033,7 @@ window.GrabLabWorld = (() => {
   }
 
   function isPoiResolved(poi) {
-    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden || poi?.defeated);
+    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden || poi?.harvested || poi?.collected || poi?.dugUp || poi?.defeated);
   }
 
   function normalizePoiTile(poi, tileX, tileY) {
@@ -1156,7 +1201,7 @@ window.GrabLabWorld = (() => {
       actionHint = "Tap again to recruit.";
     } else if (distance === 0 && (poi.type === "capturable_animal" || poi.type === "wild_animal") && poi.capturable) {
       actionHint = "Use Grab to capture.";
-    } else if (distance === 0 && (poi.type === "resource" || poi.type === "fungal_patch")) {
+    } else if (distance === 0 && (poi.type === "resource" || poi.type === "fungal_patch" || poi.type === "plant" || poi.type === "algae")) {
       actionHint = "Use Grab to collect this resource.";
     } else if (distance === 0 && poi.type === "base_structure") {
       actionHint = "Built base structure.";

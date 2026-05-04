@@ -42,7 +42,9 @@ window.GrabLabInput = (() => {
     interactionRadiusPx: 38,
     visiblePoiRadiusTiles: 5,
     harvestMenuOpen: false,
-    harvestMenuId: "harvestActionMenu"
+    harvestMenuId: "harvestActionMenu",
+    interactMenuOpen: false,
+    interactMenuId: "interactActionMenu"
   };
 
   function getWorldCanvas() {
@@ -131,7 +133,7 @@ window.GrabLabInput = (() => {
   }
 
   function isPoiResolved(poi) {
-    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden);
+    return Boolean(poi?.captured || poi?.recruited || poi?.resolved || poi?.hidden || poi?.harvested || poi?.collected || poi?.dugUp || poi?.defeated);
   }
 
   function normalizePoiWithTile(poi, tileX, tileY, tileDef = null) {
@@ -306,6 +308,16 @@ window.GrabLabInput = (() => {
 
     target[field] = true;
     target.resolvedAt = U.isoNow();
+
+    if (field === "harvested" || field === "collected" || field === "dugUp") {
+      // Plants/resources should disappear after collection now. Regrowth is represented,
+      // but disabled with a zero counter until we decide how regrowth should work.
+      target.resolved = true;
+      target.hidden = true;
+      target.regrowCounter = 0;
+      target.regrowEnabled = false;
+      target.regrowAt = null;
+    }
 
     if (field === "captured" || field === "recruited" || field === "defeated") {
       target.resolved = true;
@@ -1116,6 +1128,301 @@ window.GrabLabInput = (() => {
     return true;
   }
 
+  function closeInteractMenu() {
+    const node = U.byId(state.interactMenuId);
+    if (node) node.remove();
+    state.interactMenuOpen = false;
+  }
+
+  function createFloatingMenu(menuId, titleText, subText, anchorEl) {
+    const menu = document.createElement("div");
+    menu.id = menuId;
+    menu.setAttribute("role", "dialog");
+    menu.style.position = "fixed";
+    menu.style.zIndex = "121";
+    menu.style.minWidth = "240px";
+    menu.style.maxWidth = "310px";
+    menu.style.padding = ".7rem";
+    menu.style.borderRadius = "14px";
+    menu.style.background = "rgba(14, 22, 16, 0.96)";
+    menu.style.border = "1px solid rgba(170, 220, 170, 0.2)";
+    menu.style.boxShadow = "0 12px 30px rgba(0,0,0,.35)";
+    menu.style.backdropFilter = "blur(6px)";
+
+    const title = document.createElement("div");
+    title.style.fontWeight = "800";
+    title.style.marginBottom = ".35rem";
+    title.textContent = titleText;
+
+    const sub = document.createElement("div");
+    sub.style.fontSize = ".9em";
+    sub.style.opacity = ".82";
+    sub.style.marginBottom = ".6rem";
+    sub.textContent = subText;
+
+    menu.appendChild(title);
+    menu.appendChild(sub);
+    document.body.appendChild(menu);
+
+    const rect = anchorEl?.getBoundingClientRect?.() || {
+      left: window.innerWidth / 2 - 120,
+      top: window.innerHeight / 2 - 60,
+      bottom: window.innerHeight / 2,
+      width: 240
+    };
+
+    let left = rect.left;
+    let top = rect.top - menu.offsetHeight - 8;
+
+    if (top < 10) top = rect.bottom + 8;
+    if (left + menu.offsetWidth > window.innerWidth - 10) left = window.innerWidth - menu.offsetWidth - 10;
+    if (left < 10) left = 10;
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    return menu;
+  }
+
+  function createInteractMenuButton(actionId, label, desc, enabled = true) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "panel-btn";
+    btn.dataset.interactAction = actionId;
+    btn.disabled = !enabled;
+    btn.style.display = "block";
+    btn.style.width = "100%";
+    btn.style.textAlign = "left";
+    btn.style.margin = "0 0 .4rem 0";
+    btn.innerHTML = `<strong>${htmlEscape(label)}</strong><br><span style="opacity:.8;font-size:.9em;">${htmlEscape(desc)}</span>`;
+    btn.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      performInteractAction(actionId);
+    });
+    return btn;
+  }
+
+  function getSeedEntries() {
+    return ["player", "base", "boat"].flatMap((source) => {
+      return U.toArray(S.getInventory(source)).map((entry) => {
+        const def = S.getItemDef(entry.itemId) || {};
+        const tags = U.toArray(def.tags);
+        const isSeed = tags.includes("seed") || String(entry.itemId || "").toLowerCase().includes("seed");
+        if (!isSeed || Number(entry.quantity || 0) <= 0) return null;
+        return { source, itemId: entry.itemId, quantity: Number(entry.quantity || 0), def };
+      }).filter(Boolean);
+    });
+  }
+
+  function hasSeedItem() {
+    return getSeedEntries().length > 0;
+  }
+
+  function hasShovel() {
+    return S.hasItem?.("player", "field_shovel", 1) || S.hasItem?.("player", "folding_shovel", 1);
+  }
+
+  function studyPoi(poi = state.selectedWorldTarget) {
+    if (!poi) {
+      S.addToast("Select a plant, animal, or point of interest to study.", "warning");
+      return false;
+    }
+
+    const player = S.getPlayer();
+    if (!Array.isArray(player.catalogue)) player.catalogue = [];
+
+    const subjectId = poi.speciesId || poi.plantId || poi.itemId || poi.id;
+    const kind = poi.speciesId ? "animal" : poi.plantId ? "plant" : poi.type || "poi";
+    const existing = player.catalogue.find((entry) => entry.subjectId === subjectId && entry.kind === kind);
+
+    if (existing) {
+      existing.lastStudiedAt = U.isoNow();
+      existing.studyCount = Number(existing.studyCount || 1) + 1;
+    } else {
+      player.catalogue.push({
+        id: U.uid("cat"),
+        subjectId,
+        kind,
+        name: poi.name || U.titleCase(subjectId || "subject"),
+        description: poi.description || "Field notes pending.",
+        firstStudiedAt: U.isoNow(),
+        lastStudiedAt: U.isoNow(),
+        studyCount: 1
+      });
+    }
+
+    if (poi.speciesId) {
+      if (!Array.isArray(player.discoveredSpecies)) player.discoveredSpecies = [];
+      if (!player.discoveredSpecies.includes(poi.speciesId)) player.discoveredSpecies.push(poi.speciesId);
+    }
+
+    if (poi.plantId) {
+      if (!Array.isArray(player.discoveredPlants)) player.discoveredPlants = [];
+      if (!player.discoveredPlants.includes(poi.plantId)) player.discoveredPlants.push(poi.plantId);
+    }
+
+    S.updatePlayer(player);
+    getPlayerApi()?.awardSkillXp?.("observation", 3, "field study");
+    S.logActivity(`Studied ${poi.name || "field subject"}. Added notes to the catalogue.`, "success");
+    S.addToast("Catalogue updated.", "success");
+    UI.renderEverything?.();
+    return true;
+  }
+
+  function getSeedPlantingProfile(seedItemId) {
+    const id = String(seedItemId || "").toLowerCase();
+    if (id.includes("berry")) return { plantId: "wild_berry_bush", name: "Wild Berry Planting", harvestItemId: "berries_wild", shortName: "Berry" };
+    if (id.includes("reed")) return { plantId: "reedgrass", name: "Reedgrass Planting", harvestItemId: "fiber_bundle", shortName: "Reed" };
+    if (id.includes("bog") || id.includes("bulb")) return { plantId: "bog_bulb", name: "Bog Bulb Planting", harvestItemId: "fresh_water", shortName: "Bulb" };
+    return { plantId: "wild_berry_bush", name: "Field Planting", harvestItemId: "berries_wild", shortName: "Plant" };
+  }
+
+  function plantSeedOnCurrentTile() {
+    const seed = getSeedEntries()[0];
+    if (!seed) {
+      S.addToast("Carry seeds before planting.", "warning");
+      return false;
+    }
+
+    const world = S.getWorld();
+    const tile = S.getCurrentMapTile();
+    if (!tile) return false;
+
+    if (!S.removeItem(seed.source, seed.itemId, 1)) {
+      S.addToast("Could not remove seed from inventory.", "error");
+      return false;
+    }
+
+    const profile = getSeedPlantingProfile(seed.itemId);
+    if (!Array.isArray(tile.pointsOfInterest)) tile.pointsOfInterest = [];
+
+    const poi = {
+      id: `planted_${profile.plantId}_${world.currentTileX}_${world.currentTileY}_${Date.now().toString(36)}`,
+      name: profile.name,
+      shortName: profile.shortName,
+      description: "A player-planted seedling. Growth timing is stubbed for now; regrowth/growth counters are stored for the later gardening pass.",
+      type: "plant",
+      plantId: profile.plantId,
+      harvestItemId: profile.harvestItemId,
+      yieldMin: 1,
+      yieldMax: 2,
+      grabbable: true,
+      planted: true,
+      plantedAt: U.isoNow(),
+      growthCounter: 0,
+      growthEnabled: false,
+      regrowCounter: 0,
+      regrowEnabled: false,
+      tileX: world.currentTileX,
+      tileY: world.currentTileY,
+      localX: 20 + Math.floor(Math.random() * 24),
+      localY: 20 + Math.floor(Math.random() * 24)
+    };
+
+    tile.pointsOfInterest.push(poi);
+    S.logActivity(`Planted ${S.getItemDef(seed.itemId)?.name || seed.itemId} on ${tile.name || "this tile"}.`, "success");
+    S.addToast("Seed planted.", "success");
+    setSelectedWorldTarget(poi);
+    UI.renderEverything?.();
+    window.GL_WORLD?.drawWorld?.();
+    return true;
+  }
+
+  function digCurrentTile() {
+    if (!hasShovel()) {
+      S.addToast("Craft and carry a shovel before digging.", "warning");
+      return false;
+    }
+
+    const gains = [{ itemId: "scrap_wood", quantity: 1 }];
+    addHarvestResultsToInventory(gains, "player");
+    getPlayerApi()?.awardSkillXp?.("foraging", 2, "digging");
+    S.logActivity("Dug around the soil and recovered Scrap Wood x1.", "success");
+    S.addToast("Dug up a small find.", "success");
+    UI.renderEverything?.();
+    return true;
+  }
+
+  function performInteractAction(actionId) {
+    const target = state.selectedWorldTarget;
+    closeInteractMenu();
+
+    switch (String(actionId || "")) {
+      case "study":
+        return studyPoi(target);
+      case "grab":
+        if (!target) return false;
+        return isGrabbableResourcePoi(target) ? grabPoiResource(target) : capturePoiAnimal(target);
+      case "recruit":
+        return recruitPoiNpc(target);
+      case "attack":
+        return startPoiCombat(target);
+      case "fish":
+        try {
+          if (window.GL_FISHING?.beginCast) {
+            window.GL_FISHING.beginCast();
+            S.addToast("Line cast.", "success");
+            return true;
+          }
+          M.openModal("fishingModal");
+          return true;
+        } catch (err) {
+          S.addToast(err.message || "Could not fish.", "error");
+          return false;
+        }
+      case "set_trap":
+        M.openModal("trapsModal");
+        S.addToast("Choose a trap to place.", "info");
+        return true;
+      case "dig":
+        return digCurrentTile();
+      case "plant":
+        return plantSeedOnCurrentTile();
+      default:
+        return false;
+    }
+  }
+
+  function openInteractMenu(anchorEl) {
+    closeInteractMenu();
+    closeHarvestMenu();
+
+    const target = state.selectedWorldTarget;
+    const here = target ? isPoiOnCurrentTile(target) : true;
+    const menu = createFloatingMenu(
+      state.interactMenuId,
+      target ? `${target.name || "Interact"}` : "Interact Options",
+      target ? "Choose how to handle the selected target." : "Choose a field action for this tile.",
+      anchorEl
+    );
+
+    if (target) {
+      menu.appendChild(createInteractMenuButton("study", "Study", "Observe and add notes to your catalogue.", true));
+    }
+
+    if (target && (isCapturableAnimalPoi(target) || isGrabbableResourcePoi(target))) {
+      menu.appendChild(createInteractMenuButton("grab", "Grab", here ? "Capture or collect this target." : "Move closer before grabbing.", here));
+    }
+
+    if (target?.type === "npc" && target.recruitable) {
+      menu.appendChild(createInteractMenuButton("recruit", "Recruit", here ? "Invite this companion to join." : "Move closer before recruiting.", here));
+    }
+
+    if (target && isHostilePoi(target)) {
+      menu.appendChild(createInteractMenuButton("attack", "Attack", here ? "Start combat." : "Move closer before attacking.", here));
+    }
+
+    if (target?.type === "fish_spot" || S.getCurrentMapTile()?.type === "water" || ["river_channel", "deep_water", "wetland"].includes(S.getCurrentMapTile()?.biomeId)) {
+      menu.appendChild(createInteractMenuButton("fish", "Fish", "Cast a line or open fishing tools.", true));
+    }
+
+    menu.appendChild(createInteractMenuButton("set_trap", "Set Trap", "Open trap placement for this tile.", true));
+    menu.appendChild(createInteractMenuButton("dig", "Dig", hasShovel() ? "Dig around this tile." : "Requires a shovel carried in your backpack.", hasShovel()));
+    menu.appendChild(createInteractMenuButton("plant", "Plant Seed", hasSeedItem() ? "Plant one carried seed on this tile." : "Requires seeds in inventory.", hasSeedItem()));
+
+    state.interactMenuOpen = true;
+  }
+
   function performHarvestAction(actionId) {
     closeHarvestMenu();
 
@@ -1532,50 +1839,22 @@ window.GrabLabInput = (() => {
     if (btnInteract) {
       U.on(btnInteract, "click", (evt) => {
         evt.preventDefault();
+        evt.stopPropagation();
 
-        if (state.selectedWorldTarget) {
-          inspectPointOfInterest(state.selectedWorldTarget);
-          return;
+        if (state.interactMenuOpen) {
+          closeInteractMenu();
+        } else {
+          openInteractMenu(btnInteract);
         }
-
-        const firstCapturable = getFirstCapturablePoiOnTile();
-        const firstHostile = getFirstHostilePoiOnTile();
-        const visibleCapturable = getFirstVisibleCapturablePoi();
-        const visibleHostile = getFirstVisibleHostilePoi();
-
-        if (firstCapturable) {
-          setSelectedWorldTarget(firstCapturable);
-          inspectPointOfInterest(firstCapturable);
-          return;
-        }
-
-        if (firstHostile) {
-          setSelectedWorldTarget(firstHostile);
-          inspectPointOfInterest(firstHostile);
-          return;
-        }
-
-        if (visibleCapturable) {
-          setSelectedWorldTarget(visibleCapturable);
-          inspectPointOfInterest(visibleCapturable);
-          return;
-        }
-
-        if (visibleHostile) {
-          setSelectedWorldTarget(visibleHostile);
-          inspectPointOfInterest(visibleHostile);
-          return;
-        }
-
-        S.addToast("No nearby target selected.", "warning");
       });
 
       U.on(btnInteract, "contextmenu", (evt) => {
         evt.preventDefault();
-        if (state.selectedWorldTarget) {
-          inspectPointOfInterest(state.selectedWorldTarget);
+        evt.stopPropagation();
+        if (state.interactMenuOpen) {
+          closeInteractMenu();
         } else {
-          S.addToast("No target selected.", "warning");
+          openInteractMenu(btnInteract);
         }
       });
     }
@@ -1669,9 +1948,15 @@ window.GrabLabInput = (() => {
     U.on(document, "pointerdown", (evt) => {
       const menu = U.byId(state.harvestMenuId);
       const btn = U.byId("btnHarvest");
-      if (!state.harvestMenuOpen || !menu) return;
-      if (menu.contains(evt.target) || btn?.contains(evt.target)) return;
-      closeHarvestMenu();
+      if (state.harvestMenuOpen && menu) {
+        if (!(menu.contains(evt.target) || btn?.contains(evt.target))) closeHarvestMenu();
+      }
+
+      const interactMenu = U.byId(state.interactMenuId);
+      const interactBtn = U.byId("btnInteract");
+      if (state.interactMenuOpen && interactMenu) {
+        if (!(interactMenu.contains(evt.target) || interactBtn?.contains(evt.target))) closeInteractMenu();
+      }
     });
 
     updateActionButtonsForTarget(null);
@@ -1746,7 +2031,9 @@ window.GrabLabInput = (() => {
     grabPoiResource,
     recruitPoiNpc,
     startPoiCombat,
-    performHarvestAction
+    performHarvestAction,
+    studyPoi,
+    plantSeedOnCurrentTile
   };
 
   window.GL_INPUT = API;

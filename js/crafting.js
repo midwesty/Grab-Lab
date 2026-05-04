@@ -9,7 +9,7 @@ window.GrabLabCrafting = (() => {
     initialized: false,
     selectedRecipeId: null,
     selectedStationFilter: "all",
-    selectedStationTarget: "base" // base | boat | all
+    selectedStationTarget: "all" // base | boat | all
   };
 
   function htmlEscape(value = "") {
@@ -558,8 +558,8 @@ window.GrabLabCrafting = (() => {
     return state.selectedStationFilter;
   }
 
-  function setStationTarget(target = "base") {
-    state.selectedStationTarget = ["base", "boat", "all"].includes(target) ? target : "base";
+  function setStationTarget(target = "all") {
+    state.selectedStationTarget = ["base", "boat", "all"].includes(target) ? target : "all";
     renderCraftingPanel();
     return state.selectedStationTarget;
   }
@@ -903,6 +903,36 @@ window.GrabLabCrafting = (() => {
           { itemId: "rope_bundle", quantity: 2 }
         ],
         outputs: [{ itemId: "cage_trap_basic", quantity: 1 }]
+      },
+      {
+        id: "field_shovel",
+        name: "Field Shovel",
+        description: "A compact shovel for digging, planting, and field prep.",
+        station: "workbench",
+        durationMinutes: 18,
+        inputs: [
+          { itemId: "scrap_wood", quantity: 3 },
+          { itemId: "rope_bundle", quantity: 1 }
+        ],
+        outputs: [{ itemId: "field_shovel", quantity: 1 }]
+      },
+      {
+        id: "wild_berry_seeds",
+        name: "Wild Berry Seeds",
+        description: "Save berry seeds for planting tests.",
+        station: "field",
+        durationMinutes: 4,
+        inputs: [{ itemId: "berries_wild", quantity: 2 }],
+        outputs: [{ itemId: "wild_berry_seeds", quantity: 1 }]
+      },
+      {
+        id: "reedgrass_seeds",
+        name: "Reedgrass Seeds",
+        description: "Bundle viable reedgrass seed heads for planting.",
+        station: "field",
+        durationMinutes: 5,
+        inputs: [{ itemId: "fiber_bundle", quantity: 2 }],
+        outputs: [{ itemId: "reedgrass_seeds", quantity: 1 }]
       }
     ];
 

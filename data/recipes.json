@@ -1,19 +1,61 @@
 [
   {
-    "id": "hand_twist_rope_bundle",
-    "name": "Hand-Twisted Rope Bundle",
-    "description": "Twist plant fiber into rope without needing a station. Slower, but always available.",
+    "id": "reedgrass_seeds",
+    "name": "Reedgrass Seeds",
+    "description": "Bundle viable reedgrass seed heads for planting.",
     "station": "field",
-    "durationMinutes": 14,
+    "durationMinutes": 5,
     "inputs": [
       {
         "itemId": "fiber_bundle",
-        "quantity": 3
+        "quantity": 2
       }
     ],
     "outputs": [
       {
+        "itemId": "reedgrass_seeds",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "wild_berry_seeds",
+    "name": "Wild Berry Seeds",
+    "description": "Save berry seeds for planting tests.",
+    "station": "field",
+    "durationMinutes": 4,
+    "inputs": [
+      {
+        "itemId": "berries_wild",
+        "quantity": 2
+      }
+    ],
+    "outputs": [
+      {
+        "itemId": "wild_berry_seeds",
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "id": "field_shovel",
+    "name": "Field Shovel",
+    "description": "Craft a compact shovel for digging and planting.",
+    "station": "workbench",
+    "durationMinutes": 18,
+    "inputs": [
+      {
+        "itemId": "scrap_wood",
+        "quantity": 3
+      },
+      {
         "itemId": "rope_bundle",
+        "quantity": 1
+      }
+    ],
+    "outputs": [
+      {
+        "itemId": "field_shovel",
         "quantity": 1
       }
     ]

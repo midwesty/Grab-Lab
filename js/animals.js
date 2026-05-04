@@ -188,6 +188,7 @@ window.GrabLabAnimals = (() => {
       stats,
       needs: {
         hunger: Number(options.needs?.hunger ?? 100),
+        thirst: Number(options.needs?.thirst ?? 100),
         comfort: Number(options.needs?.comfort ?? 75),
         cleanliness: Number(options.needs?.cleanliness ?? 75)
       },
@@ -316,6 +317,11 @@ window.GrabLabAnimals = (() => {
   function captureAnimal(speciesId, options = {}) {
     ensureAnimalBuckets();
     ensurePlayerCreatureBuckets();
+
+    if (isMarsySpecies(speciesId)) {
+      const existing = getBaseSpecimens().find((entry) => entry?.speciesId === "marsy_marsupial" || entry?.id === "spec_marsy");
+      if (existing && !options.allowDuplicateMarsy) return existing;
+    }
 
     const forceCryo =
       options.preferCryo === true ||
@@ -990,6 +996,121 @@ window.GrabLabAnimals = (() => {
     return specimen.needs.hunger;
   }
 
+
+  function getAnimalWaterCandidates() {
+    return ["player", "base", "boat"].flatMap((source) => {
+      return U.toArray(S.getInventory(source)).map((entry) => {
+        const def = S.getItemDef(entry.itemId) || {};
+        const tags = U.toArray(def.tags);
+        const drinkable = tags.includes("drink") || U.toArray(def.effects).some((effect) => effect.stat === "thirst");
+        if (!drinkable || Number(entry.quantity || 0) <= 0) return null;
+        const thirstEffect = U.toArray(def.effects).find((effect) => effect.stat === "thirst");
+        return {
+          source,
+          itemId: entry.itemId,
+          quantity: Number(entry.quantity || 0),
+          name: def.name || U.titleCase(entry.itemId),
+          amount: Number(def.animalWaterValue || thirstEffect?.value || 12)
+        };
+      }).filter(Boolean);
+    });
+  }
+
+  function chooseBestAnimalWater() {
+    const candidates = getAnimalWaterCandidates();
+    if (!candidates.length) return null;
+    return candidates.sort((a, b) => b.amount - a.amount)[0];
+  }
+
+  function waterSpecimen(specimenId, amount = 12, options = {}) {
+    const specimen = getSpecimen(specimenId);
+    if (!specimen) return null;
+    if (!specimen.needs) specimen.needs = {};
+
+    let waterAmount = Number(amount || 0);
+    let waterLabel = "water";
+
+    if (!options.free) {
+      const chosen = options.itemId
+        ? getAnimalWaterCandidates().find((entry) => entry.itemId === options.itemId)
+        : chooseBestAnimalWater();
+
+      if (!chosen) {
+        S.addToast("No water available for animals.", "warning");
+        S.logActivity(`Could not water ${specimen.name}; no drinkable water was available.`, "warning");
+        return null;
+      }
+
+      S.removeItem(chosen.source, chosen.itemId, 1);
+      waterAmount = Number(options.amount || chosen.amount || waterAmount || 12);
+      waterLabel = chosen.name;
+    }
+
+    specimen.needs.thirst = U.clamp(Number(specimen.needs?.thirst ?? 50) + waterAmount, 0, 100);
+    specimen.needs.comfort = U.clamp(Number(specimen.needs?.comfort || 0) + 1, 0, 100);
+    specimen.lastUpdatedAt = U.isoNow();
+    S.updateBase({ specimens: getBaseSpecimens() });
+    S.logActivity(`Watered ${specimen.name} with ${waterLabel}.`, "success");
+    return specimen.needs.thirst;
+  }
+
+  function getNonCryoSpecimens() {
+    return getBaseSpecimens().filter((specimen) => specimen && specimen.storage !== "cryo" && !isSpecimenInCryo(specimen.id) && specimen.storage !== "released");
+  }
+
+  function feedAndWaterAll() {
+    const specimens = getNonCryoSpecimens();
+    let fed = 0;
+    let watered = 0;
+
+    specimens.forEach((specimen) => {
+      if (Number(specimen.needs?.hunger ?? 0) < 100 && feedSpecimen(specimen.id)) fed += 1;
+      if (Number(specimen.needs?.thirst ?? 50) < 100 && waterSpecimen(specimen.id)) watered += 1;
+    });
+
+    S.addToast(`Fed ${fed} and watered ${watered} animals.`, "success");
+    S.logActivity(`Care batch complete: fed ${fed}, watered ${watered}. Cryo animals skipped.`, "success");
+    return { fed, watered };
+  }
+
+  function cleanAll(amount = 100) {
+    const specimens = getNonCryoSpecimens();
+    specimens.forEach((specimen) => {
+      if (!specimen.needs) specimen.needs = {};
+      specimen.needs.cleanliness = U.clamp(Number(specimen.needs?.cleanliness ?? 0) + Number(amount || 0), 0, 100);
+      specimen.lastUpdatedAt = U.isoNow();
+    });
+
+    getAllHabitats().forEach((habitat) => {
+      habitat.cleanliness = 100;
+    });
+
+    S.updateBase({ specimens: getBaseSpecimens(), habitats: getBaseHabitats() });
+    S.updateBoat({ habitats: getBoatHabitats() });
+    S.addToast(`Cleaned ${specimens.length} non-cryo animals.`, "success");
+    S.logActivity(`Cleaned all non-cryo animals and habitats.`, "success");
+    return specimens.length;
+  }
+
+  function comfortAll(amount = 100) {
+    const specimens = getNonCryoSpecimens();
+    specimens.forEach((specimen) => {
+      if (!specimen.needs) specimen.needs = {};
+      specimen.needs.comfort = U.clamp(Number(specimen.needs?.comfort ?? 0) + Number(amount || 0), 0, 100);
+      specimen.lastUpdatedAt = U.isoNow();
+    });
+
+    getAllHabitats().forEach((habitat) => {
+      habitat.comfort = 100;
+    });
+
+    S.updateBase({ specimens: getBaseSpecimens(), habitats: getBaseHabitats() });
+    S.updateBoat({ habitats: getBoatHabitats() });
+    S.addToast(`Comforted ${specimens.length} non-cryo animals.`, "success");
+    S.logActivity(`Comforted all non-cryo animals and habitats.`, "success");
+    return specimens.length;
+  }
+
   function cleanHabitat(habitatId, amount = 20, target = "all") {
     const habitatTarget = getHabitatTarget(habitatId, target);
     const habitats = getHabitats(habitatTarget);
@@ -1344,7 +1465,13 @@ window.GrabLabAnimals = (() => {
 
     getAnimalFeedCandidates,
     chooseBestAnimalFeed,
+    getAnimalWaterCandidates,
+    chooseBestAnimalWater,
     feedSpecimen,
+    waterSpecimen,
+    feedAndWaterAll,
+    cleanAll,
+    comfortAll,
     cleanHabitat,
     tickSpecimenNeeds,
 

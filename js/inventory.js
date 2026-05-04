@@ -704,7 +704,11 @@ window.GrabLabInventory = (() => {
 
     entries.forEach((entry) => {
       const slot = U.createEl("div", {
-        className: "inventory-slot"
+        className: "inventory-slot",
+        attrs: {
+          "data-item-id": entry.itemId || "",
+          "data-item-name": entry.name || U.titleCase(entry.itemId || "item")
+        }
       });
 
       const name = entry.name || U.titleCase(entry.itemId || "item");

@@ -9,6 +9,9 @@ window.GrabLabUI = (() => {
   const state = {
     initialized: false,
     partyModalMode: "active", // active | reserve | captures | habitats
+    partyCaptureFilter: "all",
+    partyCaptureSort: "newest",
+    partyCaptureSearch: "",
     baseModalMode: "overview", // overview | storage
     toastTimers: new Map(),
     rightPanelCollapsed: {
@@ -678,7 +681,47 @@ window.GrabLabUI = (() => {
       }));
     }
 
-    return specimens.map((spec) => ({
+    let captures = specimens.filter((spec) => {
+      const filter = state.partyCaptureFilter || "all";
+      const location = getSpecimenLocationLabel(spec).toLowerCase();
+      const species = String(spec.speciesId || "").toLowerCase();
+      const family = String(spec.family || "").toLowerCase();
+      const search = String(state.partyCaptureSearch || "").trim().toLowerCase();
+
+      if (filter === "cryo" && !(spec.storage === "cryo" || location.includes("cryo"))) return false;
+      if (filter === "reserve" && !(spec.storage === "reserve" || location.includes("reserve"))) return false;
+      if (filter === "habitat" && !spec.habitatId) return false;
+      if (filter === "bred" && !(spec.method === "breeding" || spec.bred || Number(spec.genetics?.generation || 1) > 1)) return false;
+      if (filter === "grabbed" && !(spec.method === "field_capture" || spec.method === "grab" || spec.capturedAt)) return false;
+      if (!["all", "cryo", "reserve", "habitat", "bred", "grabbed"].includes(filter)) {
+        if (species !== filter && family !== filter) return false;
+      }
+
+      if (search) {
+        const haystack = [spec.name, spec.nickname, spec.speciesId, spec.family, location, U.toArray(spec.traits).join(" "), U.toArray(spec.mutations).join(" ")].join(" ").toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+
+      return true;
+    });
+
+    switch (state.partyCaptureSort || "newest") {
+      case "name":
+        captures = captures.sort((a, b) => String(getSpecimenDisplayName(a)).localeCompare(String(getSpecimenDisplayName(b))));
+        break;
+      case "species":
+        captures = captures.sort((a, b) => String(a.speciesId || "").localeCompare(String(b.speciesId || "")));
+        break;
+      case "oldest":
+        captures = captures.sort((a, b) => String(a.capturedAt || "").localeCompare(String(b.capturedAt || "")));
+        break;
+      case "newest":
+      default:
+        captures = captures.sort((a, b) => String(b.capturedAt || "").localeCompare(String(a.capturedAt || "")));
+        break;
+    }
+
+    return captures.map((spec) => ({
       id: spec.id,
       name: getSpecimenDisplayName(spec),
       subtitle: `${U.titleCase(spec.speciesId || "creature")} • ${getSpecimenLocationLabel(spec)} • Lv ${spec.level || 1}`,
@@ -785,6 +828,23 @@ window.GrabLabUI = (() => {
       }
     });
 
+    const water = U.createEl("button", {
+      className: "ghost-btn",
+      text: "Water"
+    });
+
+    U.on(water, "click", () => {
+      try {
+        const ok = animals.waterSpecimen?.(specimen.id);
+        if (ok != null) {
+          S.addToast(`${getSpecimenDisplayName(specimen)} was watered.`, "success");
+          renderEverything();
+        }
+      } catch (err) {
+        S.addToast(err.message || "Could not water specimen.", "error");
+      }
+    });
+
     const release = U.createEl("button", {
       className: "ghost-btn",
       text: "Release"
@@ -813,7 +873,7 @@ window.GrabLabUI = (() => {
       getBreedingApi()?.renderBreedingPanel?.();
     });
 
-    actions.append(addParty, reserve, cryo, feed, release, breed);
+    actions.append(addParty, reserve, cryo, feed, water, release, breed);
     host.appendChild(actions);
   }
 
@@ -1061,6 +1121,7 @@ window.GrabLabUI = (() => {
         <p><strong>Habitat Type:</strong> ${htmlEscape(U.titleCase(d.habitatType || "general"))}</p>
         <p><strong>Health:</strong> ${htmlEscape(String(d?.stats?.health ?? 0))}/${htmlEscape(String(d?.stats?.maxHealth ?? 0))}</p>
         <p><strong>Hunger:</strong> ${htmlEscape(String(Math.round(needs.hunger ?? 0)))}</p>
+        <p><strong>Thirst:</strong> ${htmlEscape(String(Math.round(needs.thirst ?? 100)))}</p>
         <p><strong>Comfort:</strong> ${htmlEscape(String(Math.round(needs.comfort ?? 0)))}</p>
         <p><strong>Cleanliness:</strong> ${htmlEscape(String(Math.round(needs.cleanliness ?? 0)))}</p>
         <p><strong>Traits:</strong> ${htmlEscape(U.toArray(d?.traits).join(", ") || "None")}</p>
@@ -1091,6 +1152,53 @@ window.GrabLabUI = (() => {
 
     renderPartyModeButtons();
     U.emptyEl(list);
+
+    if (state.partyModalMode === "captures") {
+      const toolbar = U.createEl("div", { className: "card capture-filter-card" });
+      const speciesOptions = U.uniqueBy(U.toArray(S.getBase()?.specimens).map((spec) => spec.family || spec.speciesId).filter(Boolean), (x) => String(x));
+      toolbar.innerHTML = `
+        <div class="meta-title">Capture Filters</div>
+        <div class="capture-filter-grid">
+          <input id="partyCaptureSearch" type="text" placeholder="Search captures..." value="${htmlEscape(state.partyCaptureSearch || "")}" />
+          <select id="partyCaptureFilter">
+            <option value="all">All Captures</option>
+            <option value="cryo">In Cryo</option>
+            <option value="reserve">In Reserve</option>
+            <option value="habitat">In Habitats</option>
+            <option value="bred">Bred</option>
+            <option value="grabbed">Grabbed/Captured</option>
+            ${speciesOptions.map((option) => `<option value="${htmlEscape(String(option).toLowerCase())}">${htmlEscape(U.titleCase(option))}</option>`).join("")}
+          </select>
+          <select id="partyCaptureSort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="name">Name</option>
+            <option value="species">Animal Type</option>
+          </select>
+        </div>
+        <div class="admin-console-actions" style="margin-top:.6rem;">
+          <button id="btnFeedWaterAllCaptures" class="secondary-btn">Feed & Water All</button>
+          <button id="btnCleanAllCaptures" class="ghost-btn">Clean All</button>
+          <button id="btnComfortAllCaptures" class="ghost-btn">Comfort All</button>
+        </div>
+      `;
+      list.appendChild(toolbar);
+
+      const filterEl = toolbar.querySelector("#partyCaptureFilter");
+      const sortEl = toolbar.querySelector("#partyCaptureSort");
+      const searchEl = toolbar.querySelector("#partyCaptureSearch");
+      if (filterEl) filterEl.value = state.partyCaptureFilter || "all";
+      if (sortEl) sortEl.value = state.partyCaptureSort || "newest";
+
+      U.on(filterEl, "change", () => { state.partyCaptureFilter = filterEl.value || "all"; renderPartyModal(); });
+      U.on(sortEl, "change", () => { state.partyCaptureSort = sortEl.value || "newest"; renderPartyModal(); });
+      U.on(searchEl, "input", U.debounce(() => { state.partyCaptureSearch = searchEl.value || ""; renderPartyModal(); }, 140));
+
+      const animals = getAnimalsApi();
+      U.on(toolbar.querySelector("#btnFeedWaterAllCaptures"), "click", () => { animals?.feedAndWaterAll?.(); renderEverything(); });
+      U.on(toolbar.querySelector("#btnCleanAllCaptures"), "click", () => { animals?.cleanAll?.(); renderEverything(); });
+      U.on(toolbar.querySelector("#btnComfortAllCaptures"), "click", () => { animals?.comfortAll?.(); renderEverything(); });
+    }
 
     const entries = getPartyEntriesForMode();
 

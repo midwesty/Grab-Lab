@@ -699,6 +699,7 @@ window.GrabLabMap = (() => {
     }
 
     const animals = U.toArray(S.getData()?.animals).filter((animal) => {
+      if (animal?.id === "marsy_marsupial" || U.toArray(animal?.tags).includes("starter") || U.toArray(animal?.tags).includes("guide")) return false;
       const tags = U.toArray(animal.tags);
       if (animal.habitat === biomeId) return true;
       if ((biomeId === "river_channel" || biomeId === "deep_water") && (animal.habitatType === "aquarium" || tags.includes("fish") || tags.includes("aquatic"))) return true;

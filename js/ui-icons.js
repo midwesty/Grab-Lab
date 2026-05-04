@@ -151,6 +151,32 @@ window.GrabLabUIIcons = (() => {
     return node;
   }
 
+  function getItemIcon(itemId = "", labelText = "") {
+    const id = String(itemId || labelText || "").toLowerCase();
+    if (id.includes("water")) return "💧";
+    if (id.includes("berry")) return "🫐";
+    if (id.includes("bandage")) return "🩹";
+    if (id.includes("knife")) return "🔪";
+    if (id.includes("shovel")) return "🪏";
+    if (id.includes("pole") || id.includes("line") || id.includes("lure")) return "🎣";
+    if (id.includes("net")) return "🕸️";
+    if (id.includes("worm") || id.includes("bait")) return "🪱";
+    if (id.includes("wood")) return "🪵";
+    if (id.includes("fiber") || id.includes("rope")) return "🧵";
+    if (id.includes("mold") || id.includes("spore") || id.includes("fung")) return "🍄";
+    if (id.includes("fuel")) return "⛽";
+    if (id.includes("alcohol")) return "🧪";
+    if (id.includes("skin")) return "🦎";
+    if (id.includes("shell") || id.includes("turtle")) return "🐢";
+    if (id.includes("fish") || id.includes("minnow") || id.includes("carp") || id.includes("eel")) return "🐟";
+    if (id.includes("crab")) return "🦀";
+    if (id.includes("shrimp")) return "🦐";
+    if (id.includes("boot")) return "🥾";
+    if (id.includes("seed")) return "🌱";
+    if (id.includes("trap")) return "🪤";
+    return "📦";
+  }
+
   function ensureIconStyles() {
     if (byId("grabLabAnimalIconStyles")) return;
 
@@ -197,6 +223,14 @@ window.GrabLabUIIcons = (() => {
       .animal-ui-icon-red { background: rgba(219, 100, 83, .34); }
       .animal-ui-icon-cream { background: rgba(234, 210, 160, .34); }
       .animal-ui-icon-neutral { background: rgba(160, 176, 150, .26); }
+
+      .inventory-slot .icon-thumb {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.65rem;
+        line-height: 1;
+      }
 
       .animal-enhanced-row {
         display: flex;
@@ -455,6 +489,19 @@ window.GrabLabUIIcons = (() => {
     }
   }
 
+  function decorateInventorySlots() {
+    qsa(".inventory-slot").forEach((slot) => {
+      if (!slot || slot.dataset.itemIconDecorated === "true") return;
+      const itemId = slot.dataset.itemId || "";
+      const label = slot.dataset.itemName || slot.textContent || "";
+      const thumb = slot.querySelector(".icon-thumb");
+      if (!thumb) return;
+      thumb.textContent = getItemIcon(itemId, label);
+      thumb.dataset.itemIcon = itemId;
+      slot.dataset.itemIconDecorated = "true";
+    });
+  }
+
   function decorateAll() {
     ensureIconStyles();
 
@@ -466,6 +513,7 @@ window.GrabLabUIIcons = (() => {
     decoratePartyDetailHeader();
     decorateSelectOptions();
     decorateNearbyActionPrompt();
+    decorateInventorySlots();
 
     state.lastPassAt = Date.now();
   }
@@ -491,8 +539,8 @@ window.GrabLabUIIcons = (() => {
           const elNode = node;
 
           return (
-            elNode.matches?.(".card, .nearby-card, .party-management-card, .mini-portrait, option") ||
-            elNode.querySelector?.(".card, .nearby-card, .party-management-card, .mini-portrait, option")
+            elNode.matches?.(".card, .nearby-card, .party-management-card, .mini-portrait, option, .inventory-slot") ||
+            elNode.querySelector?.(".card, .nearby-card, .party-management-card, .mini-portrait, option, .inventory-slot")
           );
         });
       });
@@ -549,7 +597,8 @@ window.GrabLabUIIcons = (() => {
     getAnimalIcon,
     getAnimalIconBg,
     findSpeciesIdFromText,
-    createIconNode
+    createIconNode,
+    getItemIcon
   };
 
   window.GL_UI_ICONS = API;
