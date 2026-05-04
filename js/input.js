@@ -33,6 +33,7 @@ window.GrabLabInput = (() => {
     downScreenX: 0,
     downScreenY: 0,
     dragCameraActive: false,
+    secondaryDragReady: false,
     dragLastScreenX: 0,
     dragLastScreenY: 0,
     lastCanvasX: 0,
@@ -840,8 +841,15 @@ window.GrabLabInput = (() => {
 
     state.holdTimer = setTimeout(() => {
       state.holdTriggered = true;
-      handleSecondaryWorldAction(canvasX, canvasY);
+      state.secondaryDragReady = true;
+      state.dragCameraActive = true;
+      U.byId("worldViewport")?.classList.add("dragging-map");
+      S.addToast("Map drag enabled.", "info");
     }, CFG.UI.holdToRightClickMs);
+
+    void evt;
+    void canvasX;
+    void canvasY;
   }
 
   function getLootTables() {
@@ -1233,8 +1241,14 @@ window.GrabLabInput = (() => {
     state.lastCanvasX = point.x;
     state.lastCanvasY = point.y;
 
-    const poi = findPoiAtCanvasPoint(point.x, point.y);
-    setSelectedWorldTarget(poi);
+    const isSecondaryMouse = evt.pointerType === "mouse" && evt.button === 2;
+    state.secondaryDragReady = Boolean(isSecondaryMouse);
+
+    if (isSecondaryMouse) {
+      evt.preventDefault();
+      state.dragCameraActive = true;
+      U.byId("worldViewport")?.classList.add("dragging-map");
+    }
 
     if (evt.pointerType === "touch" || evt.pointerType === "pen") {
       startHoldForContext(evt, point.x, point.y);
@@ -1250,12 +1264,6 @@ window.GrabLabInput = (() => {
     state.lastCanvasY = point.y;
 
     if (!state.pointerDown) {
-      const poi = findPoiAtCanvasPoint(point.x, point.y);
-      if (poi) {
-        setSelectedWorldTarget(poi);
-      } else if (state.selectedWorldTarget && isPoiOnCurrentTile(state.selectedWorldTarget)) {
-        setSelectedWorldTarget(null);
-      }
       return;
     }
 
@@ -1264,14 +1272,18 @@ window.GrabLabInput = (() => {
       Math.abs((evt.clientY ?? 0) - state.downScreenY);
 
     if (movedDistance > CFG.UI.dragThresholdPx * 2) {
-      clearHoldTimer();
-      state.dragCameraActive = true;
-      const dx = (evt.clientX ?? 0) - state.dragLastScreenX;
-      const dy = (evt.clientY ?? 0) - state.dragLastScreenY;
-      getWorldApi()?.panCameraPixels?.(dx, dy);
-      state.dragLastScreenX = evt.clientX ?? state.dragLastScreenX;
-      state.dragLastScreenY = evt.clientY ?? state.dragLastScreenY;
-      U.byId("worldViewport")?.classList.add("dragging-map");
+      if (state.secondaryDragReady || state.holdTriggered || state.dragCameraActive) {
+        clearHoldTimer();
+        state.dragCameraActive = true;
+        const dx = (evt.clientX ?? 0) - state.dragLastScreenX;
+        const dy = (evt.clientY ?? 0) - state.dragLastScreenY;
+        getWorldApi()?.panCameraPixels?.(dx, dy);
+        state.dragLastScreenX = evt.clientX ?? state.dragLastScreenX;
+        state.dragLastScreenY = evt.clientY ?? state.dragLastScreenY;
+        U.byId("worldViewport")?.classList.add("dragging-map");
+      } else {
+        clearHoldTimer();
+      }
     }
   }
 
@@ -1290,9 +1302,7 @@ window.GrabLabInput = (() => {
     clearHoldTimer();
 
     if (!state.holdTriggered && !state.dragCameraActive && movedDistance <= CFG.UI.dragThresholdPx * 2) {
-      if (evt.pointerType === "mouse" && evt.button === 2) {
-        handleSecondaryWorldAction(point.x, point.y);
-      } else {
+      if (!(evt.pointerType === "mouse" && evt.button === 2)) {
         handlePrimaryWorldAction(point.x, point.y);
       }
     }
@@ -1301,6 +1311,7 @@ window.GrabLabInput = (() => {
     state.activePointerId = null;
     state.holdTriggered = false;
     state.dragCameraActive = false;
+    state.secondaryDragReady = false;
     U.byId("worldViewport")?.classList.remove("dragging-map");
 
     void elapsed;
@@ -1312,6 +1323,7 @@ window.GrabLabInput = (() => {
     state.activePointerId = null;
     state.holdTriggered = false;
     state.dragCameraActive = false;
+    state.secondaryDragReady = false;
     U.byId("worldViewport")?.classList.remove("dragging-map");
   }
 
@@ -1324,8 +1336,8 @@ window.GrabLabInput = (() => {
     const canvas = getWorldCanvas();
     if (!canvas) return;
 
-    const point = screenToCanvas(evt, canvas);
-    handleSecondaryWorldAction(point.x, point.y);
+    void screenToCanvas;
+    void canvas;
   }
 
   function drawMiniMap() {
@@ -1668,10 +1680,13 @@ window.GrabLabInput = (() => {
   function bindRuntimeRenders() {
     U.eventBus.on("world:playerMoved", () => {
       drawMiniMap();
-      clearInteractionPrompt();
       closeHarvestMenu();
-      setSelectedWorldTarget(null);
-      updateActionButtonsForTarget(null);
+      if (state.selectedWorldTarget) {
+        setSelectedWorldTarget(state.selectedWorldTarget);
+      } else {
+        clearInteractionPrompt();
+        updateActionButtonsForTarget(null);
+      }
     });
 
     U.eventBus.on("world:tileRevealed", drawMiniMap);

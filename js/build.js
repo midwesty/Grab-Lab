@@ -330,13 +330,251 @@ window.GrabLabBuild = (() => {
     return true;
   }
 
+
+  function getBaseExpansionAnchor() {
+    const fallback = CFG?.WORLD?.startingTile || { x: 12, y: 14 };
+    const mapData = S.getData?.()?.map || {};
+    const nodes = U.toArray(mapData.nodes);
+    const dock =
+      S.getMapNode?.("field_station_dock") ||
+      nodes.find((node) => node?.id === "field_station_dock") ||
+      nodes.find((node) => String(node?.name || "").toLowerCase().includes("dock"));
+
+    return {
+      x: Number(dock?.x ?? fallback.x ?? 12),
+      y: Number(dock?.y ?? fallback.y ?? 14)
+    };
+  }
+
+  function isBaseExpansionWaterTile(tile = {}) {
+    const type = String(tile?.type || "").toLowerCase();
+    const biomeId = String(tile?.biomeId || "").toLowerCase();
+
+    return (
+      type === "water" ||
+      type === "deep_water" ||
+      biomeId === "river_channel" ||
+      biomeId === "deep_water"
+    );
+  }
+
+  function tileHasProtectedPoi(tile = {}) {
+    return U.toArray(tile?.pointsOfInterest).some((poi) => {
+      const type = String(poi?.type || "").toLowerCase();
+      return type === "dock" || poi?.role === "starter_companion" || poi?.recruitable === true;
+    });
+  }
+
+  function getExistingBaseStructureTileKeys(ignoreRecordId = null) {
+    return new Set(
+      U.toArray(S.getBase()?.structures)
+        .filter((entry) => entry && entry.id !== ignoreRecordId && entry.tileX != null && entry.tileY != null)
+        .map((entry) => `${Number(entry.tileX)},${Number(entry.tileY)}`)
+    );
+  }
+
+  function normalizeBaseStructureRecordsForTiles() {
+    const base = S.getBase();
+    const next = [];
+    let changed = false;
+
+    U.toArray(base?.structures).forEach((entry) => {
+      if (!entry?.structureId) return;
+      const qty = Math.max(1, Number(entry.quantity || 1));
+
+      for (let i = 0; i < qty; i += 1) {
+        const copy = {
+          ...entry,
+          id: entry.id && i === 0 ? entry.id : U.uid("structure"),
+          quantity: 1,
+          target: "base",
+          builtAt: entry.builtAt || U.isoNow(),
+          updatedAt: U.isoNow()
+        };
+
+        if (qty > 1) {
+          delete copy.tileX;
+          delete copy.tileY;
+          changed = true;
+        }
+
+        if (!copy.id) {
+          copy.id = U.uid("structure");
+          changed = true;
+        }
+
+        next.push(copy);
+      }
+    });
+
+    if (next.length !== U.toArray(base?.structures).length) changed = true;
+
+    if (changed) {
+      S.updateBase({ structures: next });
+    }
+
+    return next;
+  }
+
+  function findBaseExpansionTile(record = {}, structureDef = {}) {
+    const anchor = getBaseExpansionAnchor();
+    const occupied = getExistingBaseStructureTileKeys(record.id);
+    const preferredX = Number(record.tileX);
+    const preferredY = Number(record.tileY);
+
+    if (Number.isFinite(preferredX) && Number.isFinite(preferredY)) {
+      const currentTile = S.getMapTile?.(preferredX, preferredY);
+      const currentKey = `${preferredX},${preferredY}`;
+      if (
+        currentTile &&
+        !isBaseExpansionWaterTile(currentTile) &&
+        (!tileHasProtectedPoi(currentTile) || hasStructurePoiForRecord(currentTile, record)) &&
+        (!occupied.has(currentKey) || hasStructurePoiForRecord(currentTile, record))
+      ) {
+        return { x: preferredX, y: preferredY, tile: currentTile };
+      }
+    }
+
+    const maxRadius = Math.max(CFG.WORLD.worldWidthTiles || 64, CFG.WORLD.worldHeightTiles || 64);
+
+    for (let radius = 0; radius <= maxRadius; radius += 1) {
+      const candidates = [];
+
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+          candidates.push({ x: anchor.x + dx, y: anchor.y + dy });
+        }
+      }
+
+      candidates.sort((a, b) => {
+        const da = Math.abs(a.x - anchor.x) + Math.abs(a.y - anchor.y);
+        const db = Math.abs(b.x - anchor.x) + Math.abs(b.y - anchor.y);
+        if (da !== db) return da - db;
+        if (a.y !== b.y) return a.y - b.y;
+        return a.x - b.x;
+      });
+
+      for (const candidate of candidates) {
+        if (candidate.x < 0 || candidate.y < 0 || candidate.x >= CFG.WORLD.worldWidthTiles || candidate.y >= CFG.WORLD.worldHeightTiles) continue;
+
+        const key = `${candidate.x},${candidate.y}`;
+        if (occupied.has(key)) continue;
+
+        const tile = S.getMapTile?.(candidate.x, candidate.y);
+        if (!tile) continue;
+        if (isBaseExpansionWaterTile(tile)) continue;
+        if (tileHasProtectedPoi(tile)) continue;
+
+        return { x: candidate.x, y: candidate.y, tile };
+      }
+    }
+
+    void structureDef;
+    return null;
+  }
+
+  function hasStructurePoiForRecord(tile = {}, record = {}) {
+    return U.toArray(tile?.pointsOfInterest).some((poi) => poi?.type === "base_structure" && poi?.structureRecordId === record?.id);
+  }
+
+  function makeStructurePoi(record = {}, def = {}) {
+    const label = def?.name || record.name || U.titleCase(record.structureId || "Structure");
+
+    return {
+      id: `base_structure_${record.id || record.structureId}`,
+      name: label,
+      shortName: def?.shortName || String(label).slice(0, 10),
+      description: def?.description || "A built field station structure.",
+      type: "base_structure",
+      structureId: record.structureId,
+      structureRecordId: record.id,
+      category: def?.category || "base",
+      grabbable: false,
+      tileX: Number(record.tileX),
+      tileY: Number(record.tileY),
+      localX: Math.round(CFG.WORLD.tileSize * 0.5),
+      localY: Math.round(CFG.WORLD.tileSize * 0.5)
+    };
+  }
+
+  function stampBaseStructureOnMap(record = {}) {
+    if (!record?.structureId) return false;
+
+    const def = getStructureDef(record.structureId) || {};
+    const placement = findBaseExpansionTile(record, def);
+    if (!placement) {
+      S.logActivity(`Could not find a land tile for ${def.name || record.structureId}.`, "warning");
+      return false;
+    }
+
+    const tile = placement.tile;
+    record.tileX = placement.x;
+    record.tileY = placement.y;
+    record.updatedAt = U.isoNow();
+
+    tile.baseStructureId = record.structureId;
+    tile.baseStructureRecordId = record.id;
+    tile.structureId = record.structureId;
+    tile.type = tile.type && !isBaseExpansionWaterTile(tile) ? tile.type : "land";
+    tile.name = def.name || record.name || tile.name || U.titleCase(record.structureId);
+    tile.shortName = def.shortName || String(tile.name || "Base").slice(0, 10);
+    tile.pointsOfInterest = [makeStructurePoi(record, def)];
+
+    S.revealTile(placement.x, placement.y);
+    S.clearTile(placement.x, placement.y);
+    U.eventBus.emit("world:baseStructureTileChanged", {
+      structureId: record.structureId,
+      recordId: record.id,
+      tileX: placement.x,
+      tileY: placement.y
+    });
+
+    return true;
+  }
+
+  function syncBaseStructureTiles(options = {}) {
+    const records = normalizeBaseStructureRecordsForTiles();
+    let changed = false;
+
+    S.updateBase({ structures: records });
+
+    records.forEach((record) => {
+      if (options.force || record.tileX == null || record.tileY == null) {
+        const stamped = stampBaseStructureOnMap(record);
+        if (stamped) {
+          changed = true;
+          S.updateBase({ structures: records });
+        }
+      } else {
+        const tile = S.getMapTile?.(record.tileX, record.tileY);
+        if (!tile || isBaseExpansionWaterTile(tile) || !hasStructurePoiForRecord(tile, record)) {
+          const stamped = stampBaseStructureOnMap(record);
+          if (stamped) {
+            changed = true;
+            S.updateBase({ structures: records });
+          }
+        }
+      }
+    });
+
+    if (changed) {
+      S.updateBase({ structures: records });
+      window.GL_WORLD?.drawWorld?.();
+      window.GL_INPUT?.drawMiniMap?.();
+      window.GL_MAP?.drawMap?.();
+    }
+
+    return changed;
+  }
+
   function addStructureRecord(structureId, target = "base", options = {}) {
     ensureBuildBuckets();
 
     const def = getStructureDef(structureId);
     const bucket = target === "boat" ? U.toArray(S.getBoat().modules) : U.toArray(S.getBase().structures);
 
-    const stackable = def?.stackable !== false && !def?.unique;
+    const stackable = target === "boat" && def?.stackable !== false && !def?.unique;
     const existing = stackable ? bucket.find((entry) => entry.structureId === structureId) : null;
 
     if (existing) {
@@ -350,15 +588,21 @@ window.GrabLabBuild = (() => {
         target,
         quantity: Number(options.quantity || 1),
         builtAt: U.isoNow(),
-        updatedAt: U.isoNow(),
-        tileX: Number(options.tileX ?? S.getWorld().currentTileX),
-        tileY: Number(options.tileY ?? S.getWorld().currentTileY)
+        updatedAt: U.isoNow()
       });
+
+      const created = bucket[bucket.length - 1];
+      if (options.tileX != null && options.tileY != null) {
+        created.tileX = Number(options.tileX);
+        created.tileY = Number(options.tileY);
+      }
     }
 
     if (target === "boat") {
       S.updateBoat({ modules: bucket });
     } else {
+      const record = existing || bucket[bucket.length - 1];
+      stampBaseStructureOnMap(record);
       S.updateBase({ structures: bucket });
     }
 
@@ -1628,6 +1872,12 @@ window.GrabLabBuild = (() => {
       if (S.isModalOpen?.("boatModal")) renderBoatPanelEnhancements();
     });
 
+    U.eventBus.on("world:baseStructureTileChanged", () => {
+      window.GL_WORLD?.drawWorld?.();
+      window.GL_INPUT?.drawMiniMap?.();
+      window.GL_MAP?.drawMap?.();
+    });
+
     U.eventBus.on("world:timeChanged", ({ minute }) => {
       if (minute % 5 === 0) tickTraps(5);
     });
@@ -1640,6 +1890,7 @@ window.GrabLabBuild = (() => {
     ensureTrapBlueprintData();
     seedFallbackStructuresIfNeeded();
     seedStarterBuildMaterialsIfNeeded();
+    syncBaseStructureTiles();
     bindEvents();
 
     renderBuildPanels();
@@ -1669,6 +1920,8 @@ window.GrabLabBuild = (() => {
     buildStructure,
     addStructureRecord,
     applyStructureEffects,
+    syncBaseStructureTiles,
+    stampBaseStructureOnMap,
 
     getKnownTrapItems,
     getBaitItems,

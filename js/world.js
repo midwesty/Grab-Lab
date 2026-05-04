@@ -665,6 +665,14 @@ window.GrabLabWorld = (() => {
           radius: 9,
           kind: "dock"
         };
+      case "base_structure":
+        return {
+          fill: "#82d173",
+          stroke: "rgba(8, 24, 12, 0.9)",
+          labelBg: "rgba(10, 30, 14, 0.9)",
+          radius: 11,
+          kind: "structure"
+        };
       default:
         return {
           fill: "#95e07e",
@@ -780,6 +788,14 @@ window.GrabLabWorld = (() => {
         break;
       case "dock":
         drawDockGlyph(ctx, px, py);
+        break;
+      case "structure":
+        ctx.fillStyle = "#102014";
+        drawRoundedRect(ctx, px - 8, py - 7, 16, 14, 4);
+        ctx.fill();
+        ctx.fillStyle = "#edf6ef";
+        ctx.fillRect(px - 5, py - 2, 10, 2);
+        ctx.fillRect(px - 2, py - 5, 4, 8);
         break;
       default:
         ctx.fillStyle = "#edf6ef";
@@ -957,6 +973,8 @@ window.GrabLabWorld = (() => {
       actionHint = "Use Grab to capture.";
     } else if (distance === 0 && (poi.type === "resource" || poi.type === "fungal_patch")) {
       actionHint = "Use Grab to collect this resource.";
+    } else if (distance === 0 && poi.type === "base_structure") {
+      actionHint = "Built base structure.";
     } else if (distance === 0 && (poi.hostile || poi.type === "combat")) {
       actionHint = "Use Attack to engage.";
     }
