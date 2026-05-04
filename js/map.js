@@ -25,6 +25,51 @@ window.GrabLabMap = (() => {
     return U.byId("mapLocationInfo");
   }
 
+  function stableHash(x, y, salt = 0) {
+    let n = Number(x || 0) * 374761393 + Number(y || 0) * 668265263 + Number(salt || 0) * 2147483647;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    n = n ^ (n >>> 16);
+    return Math.abs(n);
+  }
+
+  function stableRand(x, y, salt = 0) {
+    return (stableHash(x, y, salt) % 100000) / 100000;
+  }
+
+  function stablePick(list = [], x = 0, y = 0, salt = 0) {
+    const safe = U.toArray(list);
+    if (!safe.length) return null;
+    return safe[stableHash(x, y, salt) % safe.length];
+  }
+
+  function getStartingTileFallback() {
+    const starting = CFG?.WORLD?.startingTile || {};
+    return {
+      x: Number(starting.x ?? 12),
+      y: Number(starting.y ?? 14)
+    };
+  }
+
+  function getPrimaryDockNode() {
+    const fallback = getStartingTileFallback();
+    const mapData = S.getData()?.map || {};
+    const nodes = U.toArray(mapData.nodes);
+
+    return (
+      S.getMapNode?.("field_station_dock") ||
+      nodes.find((node) => node?.id === "field_station_dock") ||
+      nodes.find((node) => String(node?.id || "").toLowerCase().includes("dock")) ||
+      nodes.find((node) => String(node?.name || "").toLowerCase().includes("dock")) ||
+      {
+        id: "field_station_dock",
+        name: "Field Station Dock",
+        shortName: "Dock",
+        x: fallback.x,
+        y: fallback.y
+      }
+    );
+  }
+
   function getTileSize() {
     const canvas = getCanvas();
     if (!canvas) return 16;
@@ -447,8 +492,17 @@ window.GrabLabMap = (() => {
     }
 
     const biomeId = S.getMapTile(tileX, tileY)?.biomeId || S.getWorld().currentBiomeId;
+    const worldApi = window.GL_WORLD || window.GrabLabWorld;
 
-    S.movePlayerToTile(tileX, tileY, biomeId);
+    if (!fast && worldApi?.enqueueTravelToTile) {
+      const started = worldApi.enqueueTravelToTile(tileX, tileY, biomeId);
+      if (!started) {
+        drawMap();
+        return false;
+      }
+    } else {
+      S.movePlayerToTile(tileX, tileY, biomeId);
+    }
 
     if (summary.node?.id) {
       S.updateWorld({ currentMapNodeId: summary.node.id });
@@ -540,14 +594,16 @@ window.GrabLabMap = (() => {
 
   function getRiverYForX(x) {
     const dock = getPrimaryDockNode();
-    const baseY = Number(dock?.y ?? CFG.WORLD.startingTile.y ?? 14);
+    const fallback = getStartingTileFallback();
+    const baseY = Number(dock?.y ?? fallback.y);
     return baseY + Math.sin(Number(x || 0) * 0.24) * 3.4 + Math.sin(Number(x || 0) * 0.09 + 2) * 2.2;
   }
 
   function getClusteredBiomeId(x, y) {
     const dock = getPrimaryDockNode();
-    const dx = Number(x || 0) - Number(dock?.x ?? CFG.WORLD.startingTile.x ?? 12);
-    const dy = Number(y || 0) - Number(dock?.y ?? CFG.WORLD.startingTile.y ?? 14);
+    const fallback = getStartingTileFallback();
+    const dx = Number(x || 0) - Number(dock?.x ?? fallback.x);
+    const dy = Number(y || 0) - Number(dock?.y ?? fallback.y);
     const distFromDock = Math.sqrt(dx * dx + dy * dy);
 
     if (distFromDock <= 1.15) return "field_station_island";
@@ -555,14 +611,11 @@ window.GrabLabMap = (() => {
     const riverY = getRiverYForX(x);
     const riverDist = Math.abs(Number(y || 0) - riverY);
 
-    // One main waterway, with a deeper middle. It runs right by the dock,
-    // while the dock tile and close shore stay safe/simple.
     if (riverDist < 0.65) return distFromDock <= 3.1 ? "river_channel" : "deep_water";
     if (riverDist < 1.85) return "river_channel";
 
     if (distFromDock <= 5.2) return "field_station_island";
 
-    // Ponds and one larger lake-like patch.
     const ponds = [
       { x: 20, y: 8, r: 3.4 },
       { x: 42, y: 27, r: 4.8 },
@@ -581,7 +634,6 @@ window.GrabLabMap = (() => {
     const n2 = seededNoise(x + 17, y - 11, 44);
     const n3 = seededNoise(x - 23, y + 9, 77);
 
-    // Large clustered zones instead of checkerboard tiles.
     if (Number(x) > 34 && Number(y) > 18 && n1 > 0.42) return "fungal_grove";
     if (Number(x) > 46 && Number(y) < 22 && n2 > 0.35) return "cliffside";
     if (Number(x) < 18 && Number(y) > 34 && n3 > 0.45) return "reed_forest";
@@ -757,17 +809,18 @@ window.GrabLabMap = (() => {
     mapData.tiles = nextTiles;
     mapData.proceduralLayoutVersion = "clustered-waterway-v1";
 
+    const fallback = getStartingTileFallback();
+
     if (!mapData.nodes.some((node) => node.id === "field_station_dock")) {
       mapData.nodes.unshift({
         id: "field_station_dock",
         name: "Field Station Dock",
         shortName: "Dock",
-        x: CFG.WORLD.startingTile.x,
-        y: CFG.WORLD.startingTile.y
+        x: fallback.x,
+        y: fallback.y
       });
     }
 
-    // Keep named landmarks, but add a few useful clustered-world anchors for later builder editing.
     const ensureNode = (node) => {
       if (!mapData.nodes.some((entry) => entry.id === node.id)) mapData.nodes.push(node);
     };
@@ -814,7 +867,8 @@ window.GrabLabMap = (() => {
     clearHoverTile,
     travelToTile,
     getTileSummary,
-    seedFallbackMapData
+    seedFallbackMapData,
+    getPrimaryDockNode
   };
 
   window.GL_MAP = API;
